@@ -1,5 +1,4 @@
 ---
-title: "Can Tho City Scan"
 output:
   html_notebook: default
   pdf_document:
@@ -8,29 +7,7 @@ output:
 
 # City Scan Calculations
 
-## User-defined inputs
-
-```{r, echo = F}
-if (!dir.exists("plots")) dir.create("plots") else message(paste("plots/ directory already exists in", getwd()))
-
-# Select Cities
-city <- "Can Tho"
-country <- "Vietnam"
-bm_cities_manual <- c("Ca Mau", "Cao Lanh", "Hong Ngu", "Rach Gia", "Hoi An", "Yen Bai", "Cao Bang", "Dien Bien Phu") # NULL when not in use
-map_file_prefices <- c("'Can_Tho_'", "'Cantho_'") # Include single quotations around prefices
-
-nearby_countries_string <- "cambodia|vietnam|thailand|myanmar|burma|malays|brunei"
-
-# Is city in Oxford Economics?
-# oxford_locations <- read_csv("../../03-multi-scan-materials/oxford-locations.csv", col_types = "c")
-# filter(oxford_locations, Country == country)
-in_oxford <- T
-# If there is no Oxford data, manually set population
-# population_manual <- 
-```
-
-Load in packages
-
+## Set up
 ```{r, echo = F, message = F}
 library(tidyr)
 library(ggplot2)
@@ -51,7 +28,16 @@ source("https://raw.githubusercontent.com/compoundrisk/monitor/databricks/src/fn
 tolatin <- function(x) stringi::stri_trans_general(x, id = "Latin-ASCII")
 ```
 
-# Rename maps & make sure all are included
+```{r, echo = F}
+if (!dir.exists("plots")) dir.create("plots") else message(paste("plots/ directory already exists in", getwd()))
+source("user-inputs.R")
+```
+
+---
+title: "`r city` City Scan"
+---
+
+## Rename maps & make sure all are included
 ```{r, echo = F}
 rename_command <- paste0("Rscript --vanilla ../../rename-generic.R '", getwd(), "/scan/Links' ", map_file_prefices)
 for (x in rename_command) system(x)
@@ -63,7 +49,7 @@ maps <- list.files("scan/links") %>% .[str_detect(., "^map_")]
 occasional_maps <- filter(slide_list, filename %in% maps & conditions == "occasional" & type == "map")
 
 if (nrow(occasional_maps > 0)) {
-  print("These maps exist Make sure they are included in the InDesign.")
+  print("These maps exist. Make sure they are included in the InDesign.")
   print(occasional_maps %>% select(slide, filename, warning_text))
 }
 
@@ -107,17 +93,22 @@ koeppen_city <- subset(koeppen, between(Lon, coords["Lon"] - .5, coords["Lon"] +
 print(paste("Köppen climate classification:", koeppen_city))
 ```
 
-```{r}
+```{r, echo = F}
 # Defining the UN Data and citypopulation.de pop function because it is used as backup in Oxford and in Density
-  get_un_de_pop_growth <- function(city) {
+  get_un_pop_growth <- function(city, country = country) {
     # UN Data
     pop_growth_undata <- read_csv("../../03-multi-scan-materials/undata-pop.csv",
                                   col_types = "cdccccccddc", n_max = 69490) %>%
       filter(`Country or Area` == country) %>%
+      filter(Sex == "Both Sexes") %>%
       filter(str_detect(tolower(tolatin(City)), tolower(tolatin(city)))) %>%
       select(Location = City, Year, Population = Value) %>%
-      mutate(Source = "UN Data")
+      mutate(Source = "UN Data") %>%
+      arrange(Year)
+    return(pop_growth_undata)
+  }  
     
+  get_de_pop_growth <- function(city, country = country) {
     # citypopulation.de
     url <- paste0("https://www.citypopulation.de/en/", tolower(country), "/cities/")
     de <- read_html(url) %>%
@@ -125,20 +116,44 @@ print(paste("Köppen climate classification:", koeppen_city))
       html_node("table") %>%
       html_table()
     
+    if (!any(str_detect(tolatin(de$Name), tolatin(city)))) {
+      de <- read_html(url) %>%
+        html_node("section#largecities") %>%
+        html_node("table") %>%
+        html_table()
+    }
+    
+    if (!any(str_detect(tolatin(de$Name), tolatin(city)))) {
+      de <- read_html(url) %>%
+        html_node("section#adminareas") %>%
+        html_node("table") %>%
+        html_table()
+    }
+    
     pop_growth_de <- de %>%
-      select(Location = Name, contains("Population"), "Area") %>%
-      mutate(Area_km = Area/100, .keep = "unused") %>%
+      select(Location = Name, contains("Population"), Area = starts_with("Area")) %>%
       filter(str_detect(tolatin(Location), tolatin(city))) %>%
       pivot_longer(cols = contains("Population"), values_to = "Population", names_to = "Year") %>%
-      mutate(Year = str_extract(Year, "\\d{4}") %>% as.numeric(),
+      mutate(
+        Location = Location,
+        Year = str_extract(Year, "\\d{4}") %>% as.numeric(),
              Population = str_replace_all(Population, ",", "") %>% as.numeric(),
-             Source = "citypopulation.de")
+         Source = "citypopulation.de",
+         Area_km = as.numeric(Area)/100,
+       .keep = "unused") %>%
+      arrange(Year)
+    
     if (nrow(pop_growth_de) == 0) warning("No population data detected in citypopulation.de table")
     if (length(unique(pop_growth_de$Location)) > 1) warning("More than one city name in citypopulation.de table")
     
+    return(pop_growth_de)
+  }
+
+un_de_pop_growth <- function(city, country) {
     # Select whether to use citypopulation.de or UN data based on which has more data
     # Alternatively, can plot both, coloring each line by Source column
-    pop_growth <- bind_rows(pop_growth_de, pop_growth_undata)
+    pop_growth <- bind_rows(get_un_pop_growth(city, country),
+                            get_de_pop_growth(city, country))
     return(pop_growth)
   }
 ```
@@ -148,17 +163,18 @@ print(paste("Köppen climate classification:", koeppen_city))
 Benchmark cities are selected as cities that are in neighboring countries and having a population of 50% to 150% of the focus city's
 
 ```{r, echo = F}
-# For no
 # Read Data ----
 oxford_full <- read_csv("../../03-multi-scan-materials/Oxford Global Cities Data.csv", col_types = "cccccccccdddddddddddddddddddddddddddddddddddddddddcllldlcclcc")
 # competitive_cities <- read_xlsx("/Users/bennotkin/Documents/world-bank/crp/City Scan onboard material/competitive_cities_master_dataset_2000_2015.xlsx", sheet = "Data")
 
 pop <- subset(oxford_full, Location == city & Indicator == "Total population", select = `2021`) %>% pull()
 if (length(pop) > 0) {
-paste("pop:", scales::label_comma()(pop * 1000))
+  print(paste("pop:", scales::label_comma()(pop * 1000)))
 } else {
-  pop_growth_un_de <- get_un_de_pop_growth(city)
+  pop_growth_un_de <- bind_rows(get_un_pop_growth(city, country), get_de_pop_growth(city, country))
   pop <- pop_growth_un_de %>% slice_max(Year) %>% summarize(Population = mean(Population)) %>% .$Population
+  pop <- pop/1000
+  print(paste("pop:", scales::label_comma()(pop * 1000)))
   if (length(pop) == 0) {
   pop <- population_manual/1000
   }
@@ -188,7 +204,7 @@ bm_cities <- oxford_full %>%
 
 # Manualy select benchmark cities
 # bm_cities_manual <- c('Luanda', 'Kinshasa', 'Libreville', 'Yaound�', 'Bangui', 'N\'Djamena', 'Abuja', 'Juba')
-bm_cities <- c(bm_cities, bm_cities_manual) %>% unique()
+bm_cities <- c(bm_cities, bm_cities_manual) %>% unique() %>% which_not(city)
 
 # Print table of population in benchmark cities
 print("Benchmark cities")
@@ -250,7 +266,10 @@ pop_growth <- subset(oxford, Location == city & Indicator == "Total population")
   subset(Year <= 2021)
 } else {
 # If no Oxford data, find what you can (which may require multiple sources):
-pop_growth <- pop_growth_un_de
+  # Select whether to use citypopulation.de or UN data based on which has more data
+  # Alternatively, can plot both, coloring each line by Source column
+  pop_growth <- bind_rows(get_un_pop_growth(city, country),
+                          get_de_pop_growth(city, country))
   
 larger_source <- sort(table(c(pop_growth$Source)), decreasing = T)[1] %>% names()
 pop_growth <- pop_growth %>%
@@ -295,7 +314,7 @@ pop_last <- tail(pop_growth$Population, 1)
 year_1 <- pop_growth$Year[1]
 year_last <- tail(pop_growth$Year, 1)
 pct_growth <- ((pop_last - pop_1)/pop_1) %>% round(3)
-avg_growth <- pop_growth %>% mutate(growth_pct = (Population - lag(Population))/lag(Population)) %>% arrange(desc(growth_pct)) %>% .$growth_pct %>% mean(na.rm = T) %>% round(4)
+avg_growth <- (1 + pct_growth)^(1/(year_last - year_1)) - 1
 # vstring(city, "'s population increased by", pct_growth%, "from", pop_1, "in", year_1, "to", pop_last, "in", year_last, "at an average annual rate of", avg_growth, "%")
 paste0(
   city,
@@ -311,99 +330,27 @@ pop_growth %>% mutate(growth = Population - lag(Population)) %>%
 print("Yearly population, sorted by percentage growth")
 pop_growth %>% mutate(growth_pct = (Population - lag(Population))/lag(Population)) %>%
   arrange(desc(growth_pct)) %>% print()
-if (in_oxford) {
-  print(paste("Average growth rate 2000-2010:",
-  pop_growth %>% mutate(growth_pct = (Population - lag(Population))/lag(Population)) %>%
-    filter(Year %>% between(2000, 2010)) %>%
-    arrange(desc(growth_pct)) %>% .$growth_pct %>% mean(na.rm = T) %>%
-    scales::percent(accuracy = 0.1)
-  ))
-}
+# if (in_oxford) {
+#   print(paste(
+#     "Average growth rate 2000-2010:",
+#     pop_growth %>% mutate(growth_pct = (Population - lag(Population))/lag(Population)) %>%
+#       filter(Year %>% between(2000, 2010)) %>%
+#       arrange(desc(growth_pct)) %>% .$growth_pct %>% mean(na.rm = T) %>%
+#       scales::percent(accuracy = 0.1)
+#   ))
+# }
 ```
 
 ### Population Density
 ```{r, echo = F}
 density <- subset(oxford, Indicator == "Total population") %>%
-  mutate(Group, Location, Population = 1000 * `2021`, .keep = "none") #%>%
-  # bind_rows( # For if city is not in Oxford
-  #   data.frame(Location = city, Group = city, Population = pop_last)
-  # )
-  # bind_rows(
-  #   read_xlsx("../osmaniye-balikesir-pop-formatted.xlsx", sheet = 1) %>%
-  #     mutate(Source = "Turkish Stastistical Institute") %>%
-  #     group_by(City) %>% slice_max(Year) %>%
-  #     mutate(Location = City, Population = Population, Group = case_when(
-  #       Location == city ~ city,
-  #       T ~ "Benchmark"
-  #     ), .keep = "none")
-  # )
-
-# oxford_shapefiles <- read_sf("/Users/bennotkin/Documents/world-bank/crp/city-scans/03-multi-scan-materials/OE_FUA_SHAPEFILE")
-# oxford_shapefiles <- oxford_shapefiles %>% st_make_valid()
-# # which(!st_is_valid(oxford_aoi))
-# oxford_areas <-
-#   data.frame(
-#     Location = oxford_shapefiles %>% st_drop_geometry() %>% .$OE_FUANAME,
-#     Country = oxford_shapefiles %>% st_drop_geometry() %>% .$OE_COUNTRY,
-#     Area_km = units::set_units(st_area(oxford_shapefiles), km^2))
-# write.csv(oxford_areas, "/Users/bennotkin/Documents/world-bank/crp/city-scans/03-multi-scan-materials/oxford-economics-areas.csv", row.names = F)
+  mutate(Group, Location, Population = 1000 * `2021`, .keep = "none")
 
 bm_areas <- read_csv("../../03-multi-scan-materials/oxford-economics-areas.csv", col_types = "ccd") %>%
   mutate(Location = str_to_title(Location)) %>%
   filter(Location %in% str_to_title(density$Location))
 if (any(duplicated(bm_areas$Location))) stop("Multiple Oxford Economics cities have been matched with the same name")
 
-# curl::curl_download(paste0("https://geodata.ucdavis.edu/gadm/gadm4.1/json/gadm41_", name2iso(country), "_2.json.zip", "tmp-admins.zip")
-# unzip("tmp-admins.zip")
-# filename <- unzip("tmp-admins.zip", list = T) %>% .$Name
-# gadm <- st_read(filename)
-# file.remove("tmp-admins.zip")
-# file.remove(filename)
-# gadm
-# filter(gadm, NAME_2 %in% bm_cities | VARNAME_2 %in% bm_cities)
-
-# library(osmdata)
-# places <- getbb("Turkey", featuretype = "country") %>%
-#   opq() %>%
-#   add_osm_features(features = c(
-#     '"place"="city"')) %>%#,
-#     # '"place"="town"')) %>%
-#     osmdata_sf()
-
-# places$osm_polygons
-
-# muni <- getbb("Turkey", featuretype = "country") %>%
-#   opq() %>%
-#   add_osm_features(features = c(
-#     '"place"="municipality"')) %>%#,
-#     # '"place"="town"')) %>%
-#     osmdata_sf()
-
-# # Use cat(bm_cities, sep = '" = \n"') to set up named vector
-# cat(bm_cities, sep = '" = \n"')
-# area_km <- c(
-#   "Adana" = 1950,
-#   "Adapazari" = NULL,
-#   "Ankara" = 2768,
-#   "Antalya" = 280, #1417,
-#   "Batman" = 564,
-#   "Bursa" = 17806,
-#   "Denizli" = 798,
-#   "Diyarbakir" = 2410,
-#   "Gaziantep" = 2960,
-#   "Istanbul" = 5343,
-#   "Izmir" = 2259,
-#   "Kahramanmaras" = 3017,
-#   "Kayseri" = 2810,
-#   "Konya" = 447, #6600,
-#   "Malatya" = 92, #922,
-#   "Samsun" = 1055,
-#   "Osmaniye" = 30.5,
-#   "Balıkesir" = 43
-#   )
-# # area_km <- area_miles * 2.59
-
-# density$Area_km <- area_km[density$Location]
 density <- left_join(density, bm_areas, by = "Location")
 
 # if (!in_oxford) {
@@ -415,10 +362,16 @@ density <- left_join(density, bm_areas, by = "Location")
 #     Area_km = units::drop_units(area)))
 # }
 
-non_oxford_pop <- which_not(c(city, bm_cities), oxford$Location) %>%
-  lapply(get_un_de_pop_growth) %>%
+non_oxford_cities <- which_not(c(city, bm_cities_manual), oxford$Location) %>% .[!duplicated(.)]
+non_oxford_pop <- non_oxford_cities %>%
+  lapply(function(x) {
+    country_temp <- non_oxford_cities[(non_oxford_cities == x)][1] %>% names()
+    if (length(country_temp) != 0) if (country_temp != "") country <- country_temp
+    data <- get_de_pop_growth(x, country = country)
+    return(data)
+}) %>%
   bind_rows() %>%
-  mutate(Location = str_extract(tolatin(Location), bm_cities %>% paste(collapse = "|")))
+  mutate(Location = str_extract(tolatin(Location), c(city, bm_cities) %>% paste(collapse = "|")))
 
 non_oxford_density <- non_oxford_pop %>% group_by(Location) %>%
   filter(!is.na(Area_km)) %>%
@@ -460,7 +413,7 @@ density_plot <- density %>%
   scale_y_continuous(labels = scales::label_comma(),
                      expand = expansion(mult = c(0, .01))) +
   scale_x_continuous(labels = scales::label_comma(),
-                     limits = c(0, ceiling(max(density$Population) * 20) /20),
+                     # limits = c(0, ceiling(max(density$Population / 20)) * 20),
                      expand = expansion(mult = c(0, .01))) +
   scale_color_manual(values = hues) +
   expand_limits(x = 0, y = 0)
@@ -473,7 +426,7 @@ print(density %>% arrange(-Density))
 
 ### Population Distribution
 
-Population distribution by Oxford Economics
+#### Population distribution by Oxford Economics
 
 ```{r, echo = F}
 if (in_oxford) {
@@ -556,13 +509,14 @@ print(pop_distro_plot)
 }
 ```
 
-Population by WorldPop
+#### Population by WorldPop
 
 Reproductive age is percentage of female population that is of reproductive age
 
 ```{r, echo = F}
 # WorldPop Age Groups
 age_file <- list.files()[!is.na(str_match(list.files(), ".*age_distribution.csv"))]
+if (length(age_file) == 0) warning("No WorldPop age distribution file") else {
 pop_dist_group_wp <- read_csv(age_file, col_types = "fdd") %>% 
   rename(Age_Bracket = age_group, Female = female, Male = male) %>%
   pivot_longer(cols = c("Female", "Male"), names_to = "Sex", values_to = "Count") %>% 
@@ -628,6 +582,7 @@ print(paste("working_age (15-64):", working_age$Percentage %>% {scales::label_pe
 print(paste("elderly (60+):", elderly$Percentage %>% {scales::label_percent()(.)}))
 print(paste("reproductive_age, percent of women (15-50):", reproductive_age$Sexed_Percent %>% {scales::label_percent()(.)}))
 print(paste("sex_ratio:", round(sex_ratio, 2), "males to 100 females"))
+}
 ```
 
 ### Age structure
@@ -1228,7 +1183,7 @@ ggsave("plots/oxford-household-incomes-area.png", device = "png",
 ```{r, echo = F}
 # Urban built-up area ----
 wsf <- read_xlsx("Stats/WSF.xlsx", sheet = "WSF") %>%
-  select(Year = year, uba_km2 = AREA_sq_km) %>%
+  select(Year = year, uba_km2 = any_of(c("AREA_sq_km", "cumulative sq km"))) %>%
   mutate(growth = (uba_km2 / lag(uba_km2) - 1), growth_km2 = uba_km2 - lag(uba_km2))
 uba_plot <- wsf %>%
   ggplot +
@@ -1250,7 +1205,7 @@ latest_area <- tail(wsf$uba_km2, 1)
 first_year <- wsf$Year[1]
 latest_year <- tail(wsf$Year, 1)
 pct_growth <- 100 * (latest_area - first_area)/first_area
-print(paste0("The city's built-up area grew from ", first_area, " km^2 in ", first_year, " to ", latest_area, " in ", latest_year, " for ", pct_growth, "% growth"))
+print(paste0("The city's built-up area grew from ", round(first_area, 2), " km^2 in ", first_year, " to ", round(latest_area, 2), " in ", latest_year, " for ", round(pct_growth, 2), "% growth"))
 
 print(wsf)
 # mean(head(wsf$growth, 10), na.rm = T)
@@ -1295,10 +1250,9 @@ print(wsf)
 
 ### Landcover
 ```{r, echo = F}
-lc <- read_xlsx("Stats/Landcover.xlsx") %>%
-  rename(percent = `...4`) %>% 
-  remove_missing() %>%
-  rename(`Land Cover` = OID_, Percent = percent) %>%
+lc <- read_xlsx("Stats/Landcover.xlsx", skip = 1,
+                col_names = c("Land Cover", "Value", "Count", "Percent")) %>%
+  remove_missing(na.rm = T) %>%
   arrange(desc(Percent))  %>% 
   mutate(`Land Cover` = factor(`Land Cover`, levels = `Land Cover`)) %>%
   mutate(Percent = round(Percent, 4))
@@ -1375,8 +1329,8 @@ ggdonut <- function(data, category, percent_col, colors, title) {
   # sprintf("%1.2f%%", 100*data[,percent_col])
   data$label[data[,percent_col] < .02] <- "" 
   data$label_position <- (data$max + data$min) / 2
-  
-  p <- ggplot(data, aes_string(ymax="max", ymin="min", xmax=4, xmin=3, fill= category)) +
+
+  p <- ggplot(data, aes(ymax = .data[["max"]], ymin = .data[["min"]], xmax = 4, xmin = 3, fill = .data[[category]])) +
     geom_rect(color = "white") +
     geom_text(x = 3.5, aes(y = label_position, label = label)) +
     coord_polar(theta="y") + # Try to remove that to understand how the chart is built initially
@@ -1388,7 +1342,7 @@ ggdonut <- function(data, category, percent_col, colors, title) {
   return(p)
 }
 
-ggdonut(lc, "`Land Cover`", "Percent", colors = lc_colors, title = "Land Cover")
+ggdonut(lc, "Land Cover", "Percent", colors = lc_colors, title = "Land Cover")
 ggsave("plots/wsf-lc-pieplot.png", device = "png",
        width = 8, height = 5, units = "in", dpi = "print")
 
@@ -1593,7 +1547,7 @@ ggsave("plots/wsf-fu-plot.png", plot = fu_plot, device = "png",
 print(flood_string("fu"))
 print(fu)
 print(bind_rows(head(fu, 1), tail(fu, 1)))
-print(paste("In", fu[1,1], ",", fu[1,2], "km^2 of the built-up area was exposed to river flooding at a minimum depth of 15 cm"))
+print(paste("In", fu[1,1], ",", round(fu[1,2], 2), "km^2 of the built-up area was exposed to river flooding at a minimum depth of 15 cm"))
 print(paste("Percentage of highest populated area exposed to fluvial flooding:", flood_pop_area("fu")$Percentage %>% scales::percent()))
 ```
 
@@ -1632,7 +1586,7 @@ ggsave("plots/wsf-pu-plot.png", plot = pu_plot, device = "png",
 print(flood_string("pu"))
 print(pu)
 print(bind_rows(head(pu, 1), tail(pu, 1)))
-paste("In", pu[1,1], ",", pu[1,2], "km^2 of the built-up area was exposed to surface water flooding at a minimum depth of 15 cm")
+paste("In", pu[1,1], ",", round(pu[1,2], 2), "km^2 of the built-up area was exposed to surface water flooding at a minimum depth of 15 cm")
 print(paste("Percentage of highest populated area exposed to pluvial flooding:", flood_pop_area("pu")$Percentage %>% scales::percent()))
 
 # pu %>% mutate(diff = pu$uba_km2 - lag(pu$uba_km2)) %>% .$diff %>% mean(na.rm = T) 
@@ -1684,7 +1638,7 @@ comb <- subset(pufu, type == "Combined")
 print(flood_string("comb"))
 # comb %>% mutate(diff = comb$uba_km2 - lag(comb$uba_km2)) %>% .$diff %>% mean(na.rm = T) 
 print(bind_rows(head(comb, 1), tail(comb, 1)))
-print(paste("In", comb[1,1], ",", comb[1,2], "km^2 of the built-up area was exposed to river or surface water flooding at a minimum depth of 15 cm"))
+print(paste("In", comb[1,1], ",", round(comb[1,2], 2), "km^2 of the built-up area was exposed to river or surface water flooding at a minimum depth of 15 cm"))
 print(paste("Percentage of highest populated area exposed to combined flooding:", flood_pop_area("comb")$Percentage %>% scales::percent()))
 ```
 
@@ -1825,6 +1779,7 @@ eq_text <- eq %>%
                                  c("1 fatalities" = "1 fatality",
                                     "NA fatalities" = "")),
     damage = paste(damages[as.character(damageAmountOrder)], "damage"),
+    day = case_when(is.na(day) ~ 1, T ~ day),
     BEGAN = as.Date(paste(year, month, day, sep='-'))) %>%
   arrange(BEGAN) %>%
   mutate(
@@ -1894,9 +1849,6 @@ library(units)
   
 # Photovoltaic Potential (PV)
 ```{r, echo = F}
-# Download files from https://globalsolaratlas.info/download/
-# Download the *_GISdata_LTAy_YearlyMonthlyTotals_GlobalSolarAtlas-v2_GEOTIFF/ version
-pv_path <- "../../03-multi-scan-materials/Vietnam_GISdata_LTAy_YearlyMonthlyTotals_GlobalSolarAtlas-v2_GEOTIFF/monthly/"
 files <- list.files(pv_path) %>% 
   subset(stringr::str_detect(., ".tif$"))
 
@@ -1935,4 +1887,35 @@ monthly_pv %>%
 
 ggsave("plots/monthly-pv.png", device = "png",
        width = 4, height = 3.5, units = "in", dpi = "print")
+```
+
+## Plots Check
+```{r}
+# This checks which maps are missing. I could do the same for plots, but would need to be at end of document
+slide_list <- read_csv("../../slide-list.csv", col_types = "cccddcc")
+plots <- list.files("plots")
+# occasional_maps <- filter(slide_list, filename %in% plots & conditions == "occasional" & type == "map")
+# 
+# if (nrow(occasional_maps > 0)) {
+#   print("These maps exist. Make sure they are included in the InDesign.")
+#   print(occasional_maps %>% select(slide, filename, warning_text))
+# }
+
+missing_plots <- filter(slide_list, filename %ni% plots & type == "plot") %>%
+  filter(conditions != "none") %>%
+  filter(!in_oxford & conditions != "oxford")
+# Use the following to make a warning instead of printing a table
+  # mutate(
+  #   slide_number = paste(section, section_order, sep = "."),
+  #   # gap = 27 - nchar(filename),
+  #   slide = leading_zeros(substr(slide, 1, 10), length = 10, filler = " ", trailing = T),
+  #   filename = leading_zeros(filename, length = 28, filler = " ", trailing = T),
+  #   warning_message = paste0(slide, ": ", filename, warning_text),
+  #   .keep = "none")
+# warning(paste0("missing maps:\n", paste(missing_maps$warning_message, collapse = "\n")))
+
+if (nrow(missing_plots) > 0) {
+  print("The following plots have not been made. Why not?")
+  print(missing_plots %>% select(slide, filename, warning_text))
+}
 ```
