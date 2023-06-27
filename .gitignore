@@ -3,3 +3,5 @@ scan/.DS_Store
 scan/Links/.DS_Store
 Maps/.DS_Store
 plots/.DS_Store
+scan/Links/map_*
+scan/Links/oxford_*

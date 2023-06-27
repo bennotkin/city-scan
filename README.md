@@ -17,7 +17,7 @@ git clone --filter=blob:none <path or url to repo> <yyyy-mm-group-cityname>
 For example, for the July 2023 Yen Bai scan, I would do
 
 ```
-git clone --filter=blob:none /current-scans/0000-template /current-scans/2023-07-vietnam-yen-bai
+git clone 01-current-scans/0000-template 01-current-scans/2023-07-vietnam-yen-bai
 ```
 
 Doing so will create a directory with the starting pieces for a new scan.
