@@ -1181,9 +1181,11 @@ ggsave("plots/oxford-household-incomes-area.png", device = "png",
 ## WSF
 ### Urban built-up area
 ```{r, echo = F}
+if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
 # Urban built-up area ----
 wsf <- read_xlsx("Stats/WSF.xlsx", sheet = "WSF") %>%
-  select(Year = year, uba_km2 = any_of(c("AREA_sq_km", "cumulative sq km"))) %>%
+  rename(Year = 1) %>%
+  select(Year, uba_km2 = any_of(c("AREA_sq_km", "cumulative sq km"))) %>%
   mutate(growth = (uba_km2 / lag(uba_km2) - 1), growth_km2 = uba_km2 - lag(uba_km2))
 uba_plot <- wsf %>%
   ggplot +
@@ -1246,6 +1248,7 @@ print(wsf)
 #   scale_y_continuous(labels = scales::comma, limits = c(0,10), expand = expansion(c(0, NA))) +
 #   theme_minimal() +
 #   labs(title = "Growth rate (sq. km/yr), 3-year rolling average")
+}
 ```
 
 ### Landcover
@@ -1514,6 +1517,7 @@ flood_pop_area <- function(flood_type) {
 
 ### Fluvial
 ```{r, echo = F}
+if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
 fu <- gather_flood_data("fu")
 
 fu_plot <- fu %>%
@@ -1549,10 +1553,12 @@ print(fu)
 print(bind_rows(head(fu, 1), tail(fu, 1)))
 print(paste("In", fu[1,1], ",", round(fu[1,2], 2), "km^2 of the built-up area was exposed to river flooding at a minimum depth of 15 cm"))
 print(paste("Percentage of highest populated area exposed to fluvial flooding:", flood_pop_area("fu")$Percentage %>% scales::percent()))
+}
 ```
 
 ### Pluvial
 ```{r, echo = F}
+if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
 pu <- gather_flood_data("pu")
 pu_plot <- pu %>%
   ggplot +
@@ -1590,10 +1596,12 @@ paste("In", pu[1,1], ",", round(pu[1,2], 2), "km^2 of the built-up area was expo
 print(paste("Percentage of highest populated area exposed to pluvial flooding:", flood_pop_area("pu")$Percentage %>% scales::percent()))
 
 # pu %>% mutate(diff = pu$uba_km2 - lag(pu$uba_km2)) %>% .$diff %>% mean(na.rm = T) 
+}
 ```
 
 ### Combined Fluvial & Pluvial
 ```{r, echo = F}
+if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
 pufu <- gather_flood_data("comb")
 pufu <- bind_rows(
 fu %>% mutate(type = "River"),
@@ -1640,6 +1648,7 @@ print(flood_string("comb"))
 print(bind_rows(head(comb, 1), tail(comb, 1)))
 print(paste("In", comb[1,1], ",", round(comb[1,2], 2), "km^2 of the built-up area was exposed to river or surface water flooding at a minimum depth of 15 cm"))
 print(paste("Percentage of highest populated area exposed to combined flooding:", flood_pop_area("comb")$Percentage %>% scales::percent()))
+}
 ```
 
 ## Flood Events
