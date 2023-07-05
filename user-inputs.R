@@ -18,7 +18,26 @@ in_oxford <- F
 # population_manual <- 
 # area_manual <- c("" = X)
 
-# Photovoltaic Potential
+# Local File Locations
+# I recommend creating a directory to host all of the data used by multiple city
+# scans. I call my such directory `03-multi-scan-materials`
+# You can find all of these files except Oxford Economics at
+# https://github.com/bennotkin/multi-city-scan-data
+
+# Photovoltaic Potential (THIS CHANGES PER COUNTRY)
 # Download files from https://globalsolaratlas.info/download/
 # Download the *_GISdata_LTAy_YearlyMonthlyTotals_GlobalSolarAtlas-v2_GEOTIFF/ version
 pv_path <- "../../03-multi-scan-materials/Vietnam_GISdata_LTAy_YearlyMonthlyTotals_GlobalSolarAtlas-v2_GEOTIFF/monthly/"
+
+# Oxford Economics (internal)
+oxford_file <- "../../03-multi-scan-materials/Oxford Global Cities Data.csv"
+oxford_areas_file <- "../../03-multi-scan-materials/oxford-economics-areas.csv"
+
+# UN Data Population
+undata_file <- "../../03-multi-scan-materials/undata-pop.csv"
+
+# Koeppen Climate Classification
+koeppen_file <- "../../03-multi-scan-materials/Koeppen-Geiger-ASCII.csv"
+
+# Flood Archive
+flood_archive_file <- "~/Documents/world-bank/crp/city-scans/03-multi-scan-materials/flood-archive"

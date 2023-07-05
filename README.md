@@ -31,8 +31,16 @@ Doing so will create a directory with the starting pieces for a new scan.
   - `Links/` The directory where the InDesign document reads all its files from. At the start it includes the images used by all scans; you will later paste all maps and plots into this directory as well
   - `template-city-scan.idml`
 
+## Not in the directory
+You will also need the following files which are not in the directory. These files are used by all or multiple city scans. Some of these are stored in a separate repo, which you can clone with `git clone https://github.com/bennotkin/multi-scan-materials.git`. I recommend cloning this to a location outside the folder created by the previous cloning, as these files will be used by many scans.
+
+A couple datasets are not included in the repo
+
+1. Oxford Economics (internal only)
+2. Photovoltaics (different dataset per country: download the *_GISdata_LTAy_YearlyMonthlyTotals_GlobalSolarAtlas-v2_GEOTIFF/ version from https://globalsolaratlas.info/download/ after selecting the appropriate country)
+
 ## First steps, after cloning
-1. Edit variables in `user-inputs.R`
+1. Edit variables in `user-inputs.R`, including paths to locally downloaded files
 2. Download relevant directories from [Sharepoint](https://worldbankgroup-my.sharepoint.com/:f:/r/personal/tgertin_worldbank_org/Documents/city_scan2?csf=1&web=1&e=E28Xaz), and place in directory. It may be necessary to download in multiple batches.
    1. `AOI/`
    2. `Maps/`

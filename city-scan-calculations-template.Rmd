@@ -39,12 +39,12 @@ title: "`r city` City Scan"
 
 ## Rename maps & make sure all are included
 ```{r, echo = F}
-rename_command <- paste0("Rscript --vanilla ../../rename-generic.R '", getwd(), "/scan/Links' ", map_file_prefices)
+rename_command <- paste0("Rscript --vanilla rename-generic.R '", getwd(), "/scan/Links' ", map_file_prefices)
 for (x in rename_command) system(x)
 system(paste0("magick ", getwd(), "/scan/Links/map_network_plot.png -trim -fuzz 30% -fill white -opaque '#111111' ", getwd(), "/scan/Links/map_network_plot_white.png"))
 
 # This checks which maps are missing. I could do the same for plots, but would need to be at end of document
-slide_list <- read_csv("../../slide-list.csv", col_types = "cccddcc")
+slide_list <- read_csv("slide-list.csv", col_types = "cccddcc")
 maps <- list.files("scan/links") %>% .[str_detect(., "^map_")]
 occasional_maps <- filter(slide_list, filename %in% maps & conditions == "occasional" & type == "map")
 
@@ -85,7 +85,7 @@ print(paste("AOI Area:", round(area, 1), "sq km"))
 # Climate
 coords <- st_centroid(aoi) %>% st_coordinates() %>% suppressWarnings()
 names(coords) <- c("Lon", "Lat")       
-koeppen <- read_csv("../../03-multi-scan-materials/Koeppen-Geiger-ASCII.csv", col_types = "ddc")
+koeppen <- read_csv(koeppen_file, col_types = "ddc")
 koeppen_city <- subset(koeppen, between(Lon, coords["Lon"] - .5, coords["Lon"] + .5) &  
   between(Lat, coords["Lat"] - .5, coords["Lat"] + .5)) %>%
   .$Cls %>% unique()
@@ -97,7 +97,11 @@ print(paste("Köppen climate classification:", koeppen_city))
 # Defining the UN Data and citypopulation.de pop function because it is used as backup in Oxford and in Density
   get_un_pop_growth <- function(city, country = country) {
     # UN Data
-    pop_growth_undata <- read_csv("../../03-multi-scan-materials/undata-pop.csv",
+    if (!file.exists(undata_file)) {
+      warning(paste0("undata_file (", undata_file, ") does not exist.")
+      return(NULL)
+      } else {
+    pop_growth_undata <- read_csv(undata_file,
                                   col_types = "cdccccccddc", n_max = 69490) %>%
       filter(`Country or Area` == country) %>%
       filter(Sex == "Both Sexes") %>%
@@ -106,6 +110,7 @@ print(paste("Köppen climate classification:", koeppen_city))
       mutate(Source = "UN Data") %>%
       arrange(Year)
     return(pop_growth_undata)
+    }
   }  
     
   get_de_pop_growth <- function(city, country = country) {
@@ -164,7 +169,7 @@ Benchmark cities are selected as cities that are in neighboring countries and ha
 
 ```{r, echo = F}
 # Read Data ----
-oxford_full <- read_csv("../../03-multi-scan-materials/Oxford Global Cities Data.csv", col_types = "cccccccccdddddddddddddddddddddddddddddddddddddddddcllldlcclcc")
+oxford_full <- read_csv(oxford_file, col_types = "cccccccccdddddddddddddddddddddddddddddddddddddddddcllldlcclcc")
 # competitive_cities <- read_xlsx("/Users/bennotkin/Documents/world-bank/crp/City Scan onboard material/competitive_cities_master_dataset_2000_2015.xlsx", sheet = "Data")
 
 pop <- subset(oxford_full, Location == city & Indicator == "Total population", select = `2021`) %>% pull()
@@ -346,7 +351,7 @@ pop_growth %>% mutate(growth_pct = (Population - lag(Population))/lag(Population
 density <- subset(oxford, Indicator == "Total population") %>%
   mutate(Group, Location, Population = 1000 * `2021`, .keep = "none")
 
-bm_areas <- read_csv("../../03-multi-scan-materials/oxford-economics-areas.csv", col_types = "ccd") %>%
+bm_areas <- read_csv(oxford_areas_file, col_types = "ccd") %>%
   mutate(Location = str_to_title(Location)) %>%
   filter(Location %in% str_to_title(density$Location))
 if (any(duplicated(bm_areas$Location))) stop("Multiple Oxford Economics cities have been matched with the same name")
@@ -1653,7 +1658,7 @@ print(paste("Percentage of highest populated area exposed to combined flooding:"
 
 ## Flood Events
 ```{r, echo = F}
-flood_archive <- read_sf("~/Documents/world-bank/crp/city-scans/03-multi-scan-materials/flood-archive")
+flood_archive <- read_sf(flood_archive_file)
 aoi <- read_sf("AOI")
 
 flood_archive <- st_make_valid(flood_archive)
@@ -1901,7 +1906,7 @@ ggsave("plots/monthly-pv.png", device = "png",
 ## Plots Check
 ```{r}
 # This checks which maps are missing. I could do the same for plots, but would need to be at end of document
-slide_list <- read_csv("../../slide-list.csv", col_types = "cccddcc")
+slide_list <- read_csv("slide-list.csv", col_types = "cccddcc")
 plots <- list.files("plots")
 # occasional_maps <- filter(slide_list, filename %in% plots & conditions == "occasional" & type == "map")
 # 
