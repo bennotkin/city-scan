@@ -40,6 +40,13 @@ title: "`r city` City Scan"
 
 ## Rename maps & make sure all are included
 ```{r, echo = F}
+if (!any(str_detect(list.files("scan/Links"), "_admin.png"))) {
+  list.files("Maps") %>%
+    lapply(function(file) {
+      file.copy(paste0("Maps/", file), "scan/Links")
+    })
+}
+
 rename_command <- paste0("Rscript --vanilla rename-generic.R '", getwd(), "/scan/Links' ", map_file_prefices)
 for (x in rename_command) system(x)
 system(paste0("magick ", getwd(), "/scan/Links/map_network_plot.png -trim -fuzz 30% -fill white -opaque '#111111' ", getwd(), "/scan/Links/map_network_plot_white.png"))
