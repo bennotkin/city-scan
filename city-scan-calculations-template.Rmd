@@ -22,6 +22,7 @@ library(sf)
 library(curl)
 library(dplyr)
 library(rvest)
+library(units)
 
 country_groups <- read_csv("https://raw.githubusercontent.com/compoundrisk/monitor/databricks/src/country-groups.csv")
 source("https://raw.githubusercontent.com/compoundrisk/monitor/databricks/src/fns/helpers.R")
@@ -49,8 +50,8 @@ maps <- list.files("scan/links") %>% .[str_detect(., "^map_")]
 occasional_maps <- filter(slide_list, filename %in% maps & conditions == "occasional" & type == "map")
 
 if (nrow(occasional_maps > 0)) {
-  print("These maps exist. Make sure they are included in the InDesign.")
-  print(occasional_maps %>% select(slide, filename, warning_text))
+  cat("These maps exist. Make sure they are included in the InDesign.")
+  occasional_maps %>% select(slide, filename, warning_text)
 }
 
 missing_maps <- filter(slide_list, filename %ni% maps & type == "map")
@@ -65,8 +66,8 @@ missing_maps <- filter(slide_list, filename %ni% maps & type == "map")
 # warning(paste0("missing maps:\n", paste(missing_maps$warning_message, collapse = "\n")))
 
 if (nrow(missing_maps) > 0) {
-  print("The following maps are not included. Should they be?")
-  print(missing_maps %>% select(slide, filename, warning_text))
+  cat("The following maps are not included. Should they be?")
+  missing_maps %>% select(slide, filename, warning_text)
 }
 
 ```
@@ -80,7 +81,7 @@ aoi <- read_sf("AOI") %>%
   st_transform("EPSG:4326")
 area <- units::set_units(st_area(aoi), km^2)
 # Get area
-print(paste("AOI Area:", round(area, 1), "sq km"))
+cat(paste("AOI Area:", round(area, 1), "sq km"))
 
 # Climate
 coords <- st_centroid(aoi) %>% st_coordinates() %>% suppressWarnings()
@@ -90,7 +91,7 @@ koeppen_city <- subset(koeppen, between(Lon, coords["Lon"] - .5, coords["Lon"] +
   between(Lat, coords["Lat"] - .5, coords["Lat"] + .5)) %>%
   .$Cls %>% unique()
 # Find class here: https://en.wikipedia.org/wiki/Köppen_climate_classification
-print(paste("Köppen climate classification:", koeppen_city))
+cat(paste("Köppen climate classification:", koeppen_city))
 ```
 
 ```{r, echo = F}
@@ -98,7 +99,7 @@ print(paste("Köppen climate classification:", koeppen_city))
   get_un_pop_growth <- function(city, country = country) {
     # UN Data
     if (!file.exists(undata_file)) {
-      warning(paste0("undata_file (", undata_file, ") does not exist.")
+      warning(paste0("undata_file (", undata_file, ") does not exist."))
       return(NULL)
       } else {
     pop_growth_undata <- read_csv(undata_file,
@@ -174,12 +175,12 @@ oxford_full <- read_csv(oxford_file, col_types = "cccccccccddddddddddddddddddddd
 
 pop <- subset(oxford_full, Location == city & Indicator == "Total population", select = `2021`) %>% pull()
 if (length(pop) > 0) {
-  print(paste("pop:", scales::label_comma()(pop * 1000)))
+  cat(paste("pop:", scales::label_comma()(pop * 1000)))
 } else {
   pop_growth_un_de <- bind_rows(get_un_pop_growth(city, country), get_de_pop_growth(city, country))
   pop <- pop_growth_un_de %>% slice_max(Year) %>% summarize(Population = mean(Population)) %>% .$Population
   pop <- pop/1000
-  print(paste("pop:", scales::label_comma()(pop * 1000)))
+  cat(paste("pop:", scales::label_comma()(pop * 1000)))
   if (length(pop) == 0) {
   pop <- population_manual/1000
   }
@@ -212,22 +213,21 @@ bm_cities <- oxford_full %>%
 bm_cities <- c(bm_cities, bm_cities_manual) %>% unique() %>% which_not(city)
 
 # Print table of population in benchmark cities
-print("Benchmark cities")
+cat("Benchmark cities")
 oxford_full %>%
   select(Location, Country, Indicator, `2021`) %>%
   subset(Location %in% bm_cities & Indicator == "Total population") %>%
   mutate(`2021` = `2021` * 1000) %>%
-  arrange(Location) %>%
-  print()
+  arrange(Location)
+  
 
 # Print table of population of nearby cities not in benchmark list
-print("Nearby non-benchmark cities")
+cat("Nearby non-benchmark cities")
 oxford_full %>%
   select(Location, Country, Indicator, `2021`) %>%
   subset(Location %in% nearby_cities & Location %ni% bm_cities & Indicator == "Total population") %>%
   mutate(`2021` = `2021` * 1000) %>%
-  arrange(`2021`) %>%
-  print()
+  arrange(`2021`) 
 
 oxford <- subset(oxford_full, Location %in% c(city, bm_cities)) %>%
   mutate(Group = case_when(Location == city ~ Location, T ~ "Benchmark") %>%
@@ -238,14 +238,13 @@ oxford <- subset(oxford_full, Location %in% c(city, bm_cities)) %>%
 # bm_cities <- bm_cities %>% str_replace("Lom�", "Lomé")
 
 # Generate benchmark city text
-print("Benchmark footnote text:")
+cat("Benchmark footnote text:")
 oxford %>% 
   select(Location, Country) %>% distinct() %>%
   arrange(Country) %>% group_by(Country) %>%
   summarize(text = paste_and(Location), .groups = "drop") %>%
   mutate(text = paste0(text, " (", Country,")")) %>%
-  .$text %>% paste_and() %>%
-  print()
+  .$text %>% paste_and() 
   
 countries <- oxford$Country %>% unique()
 oxford_countries <- subset(oxford_full, Country %in% countries) %>%
@@ -312,7 +311,7 @@ pop_growth_plot <- ggplot(pop_growth, aes(x = Year, y = Population)) + #, color 
         # legend.position = "bottom")
 ggsave("plots/oxford-pop-growth.png", plot = pop_growth_plot, device = "png",
        width = 8, height = 5, units = "in", dpi = "print")
-print(pop_growth_plot)
+pop_growth_plot
 
 pop_1 <- pop_growth$Population[1]
 pop_last <- tail(pop_growth$Population, 1)
@@ -327,14 +326,14 @@ paste0(
    scales::label_percent()(pct_growth),
    " from ", scales::label_comma()(pop_1), " in ", year_1, " to ", scales::label_comma()(pop_last), " in ", year_last,
    ", at an average annual rate of ", scales::label_percent(accuracy = 0.1)(avg_growth)) %>%
-  print()
+   cat()
 
-print("Yearly population, sorted by absolute growth")
+cat("Yearly population, sorted by absolute growth")
 pop_growth %>% mutate(growth = Population - lag(Population)) %>%
-  arrange(desc(growth)) %>% print()
-print("Yearly population, sorted by percentage growth")
+  arrange(desc(growth)) 
+cat("Yearly population, sorted by percentage growth")
 pop_growth %>% mutate(growth_pct = (Population - lag(Population))/lag(Population)) %>%
-  arrange(desc(growth_pct)) %>% print()
+  arrange(desc(growth_pct)) 
 # if (in_oxford) {
 #   print(paste(
 #     "Average growth rate 2000-2010:",
@@ -425,8 +424,8 @@ density_plot <- density %>%
 
 ggsave("plots/oxford-pop-density-scatter.png", plot = density_plot, device = "png",
        width = 8, height = 5, units = "in", dpi = "print")
-print(density_plot)
-print(density %>% arrange(-Density))
+density_plot
+density %>% arrange(-Density)
 ```
 
 ### Population Distribution
@@ -459,7 +458,7 @@ pop_dist_group <- pop_dist_long %>%
   mutate(Group = reorder(Group, order)) %>%
   ungroup()
 
-print(pop_dist_group %>% mutate(cumpct = cumsum(Percentage)))
+pop_dist_group %>% mutate(cumpct = cumsum(Percentage))
 
 pop_distro_plot <- ggplot(pop_dist_group, aes(x = Age_Bracket, y = Percentage)) +
   # geom_bar(stat = "identity", position = "dodge2") + 
@@ -485,7 +484,7 @@ pop_distro_plot <- ggplot(pop_dist_group, aes(x = Age_Bracket, y = Percentage)) 
 # limits = c(0,.1))
 ggsave("plots/oxford-pop-distro.png", plot = pop_distro_plot, device = "png",
        width = 8, height = 6.5, units = "in", dpi = "print")
-print(pop_distro_plot)
+pop_distro_plot
 
 # # Plotting histogram of focus city and lines for all other cities
 # # Probably better to use just one line for the median city
@@ -534,7 +533,7 @@ pop_dist_group_wp <- read_csv(age_file, col_types = "fdd") %>%
     Sexed_Percent = Count/sum(Count),
     Sexed_Percent_cum = cumsum(Sexed_Percent)) %>% 
   ungroup()
-print(pop_dist_group_wp)
+pop_dist_group_wp
 pop_age_sex_plot <- ggplot(pop_dist_group_wp, aes(x = Age_Bracket, y = Percentage, fill = Sex)) +
   # geom_bar(stat = "identity", position = "dodge2") + 
   geom_col(position = "dodge") + 
@@ -556,7 +555,7 @@ pop_age_sex_plot <- ggplot(pop_dist_group_wp, aes(x = Age_Bracket, y = Percentag
                      limits = c(0, ceiling(max(pop_dist_group_wp$Percentage) * 100) /100),
                      expand = c(0,0)) #+
   # scale_fill_manual(values = hues)
-print(pop_age_sex_plot)
+pop_age_sex_plot
 ggsave("plots/world-pop-age-sex.png", plot = pop_age_sex_plot, device = "png",
        width = 8, height = 6.84, units = "in", dpi = "print")
 
@@ -581,12 +580,12 @@ if (!in_oxford) {
   mutate(cumpct = cumsum(Percentage))
 }
 
-print(paste("under5:", under5$Percentage %>% {scales::label_percent()(.)}))
-print(paste("youth (15-24):", youth$Percentage %>% {scales::label_percent()(.)}))
-print(paste("working_age (15-64):", working_age$Percentage %>% {scales::label_percent()(.)}))
-print(paste("elderly (60+):", elderly$Percentage %>% {scales::label_percent()(.)}))
-print(paste("reproductive_age, percent of women (15-50):", reproductive_age$Sexed_Percent %>% {scales::label_percent()(.)}))
-print(paste("sex_ratio:", round(sex_ratio, 2), "males to 100 females"))
+cat(paste("under5:", under5$Percentage %>% {scales::label_percent()(.)}))
+cat(paste("youth (15-24):", youth$Percentage %>% {scales::label_percent()(.)}))
+cat(paste("working_age (15-64):", working_age$Percentage %>% {scales::label_percent()(.)}))
+cat(paste("elderly (60+):", elderly$Percentage %>% {scales::label_percent()(.)}))
+cat(paste("reproductive_age, percent of women (15-50):", reproductive_age$Sexed_Percent %>% {scales::label_percent()(.)}))
+cat(paste("sex_ratio:", round(sex_ratio, 2), "males to 100 females"))
 }
 ```
 
@@ -642,8 +641,8 @@ pop_dist_plot <- ggplot(pop_dist_structure) +
          x = "Year")
 ggsave("plots/oxford-age-structure-area.png", plot = pop_dist_plot, device = "png",
          width = 4, height = 3.5, units = "in", dpi = "print")
-print(pop_dist_structure)
-print(pop_dist_plot)
+pop_dist_structure
+pop_dist_plot
 }
 ```
   
@@ -695,7 +694,7 @@ if (in_oxford) {
   # scale_color_manual(values = c("GDP Share" = "dark grey", "Employment Share" = "black", "Population Share" = "black"))
   ggsave("plots/oxford-national-shares.png", plot = national_shares_plot, device = "png",
          width = 8, height = 6.5, units = "in", dpi = "print")
-  print(national_shares_plot)
+  national_shares_plot
 }
 ```
 
@@ -712,8 +711,8 @@ if (in_oxford) {
   pop_growth2 <- pop_growth_years %>%
     summarize(`Population Growth` = mean(Growth, na.rm = T), .groups = "drop") %>%
     arrange(desc(`Population Growth`))
-  print("Population growth from 2000 to 2021")
-  print(pop_growth2)
+  cat("Population growth from 2000 to 2021")
+  pop_growth2
   emp_growth <- oxford %>% subset(Indicator == "Employment - Total") %>%
     pivot_longer(cols = contains("20"), values_to = "Value", names_to = "Year") %>%
     mutate(Group, Location, Year = as.numeric(Year), Value, .keep = "used") %>%
@@ -724,8 +723,8 @@ if (in_oxford) {
     subset(between(Year, 2010, 2021)) %>%
     summarize(`Employment Growth` = mean(Growth, na.rm = T), .groups = "drop") %>%
     arrange(desc(`Employment Growth`))
-  print("Employment growth from 2000 to 2021")
-  print(emp_growth)
+  cat("Employment growth from 2000 to 2021")
+  emp_growth
   emp_growth_years <- oxford %>% subset(Indicator == "Employment - Total") %>%
     pivot_longer(cols = contains("20"), values_to = "Value", names_to = "Year") %>%
     mutate(Group, Location, Year = as.numeric(Year), Value, .keep = "used") %>%
@@ -749,10 +748,10 @@ if (in_oxford) {
     subset(between(Year, 2000, 2021)) %>%
     group_by(Group, Location) %>%
     mutate(Growth = Value / lag(Value) - 1)
-  print("GDP growth from 2000 to 2021")
-  print(gdp_growth)
+  cat("GDP growth from 2000 to 2021")
+  gdp_growth
   # filter(gdp_growth_years, Year == 2022) %>% arrange(desc(Growth))
-  print("GDP growth in focus city for each year")
+  cat("GDP growth in focus city for each year")
   filter(gdp_growth_years, Location == city)
   # city_pop_growth <- subset(pop_growth2, Location == city, select = `Population Growth`) %>% pull()
   # ggplot(pop_growth2) +
@@ -785,8 +784,8 @@ pop_longitude <- oxford %>% subset(Indicator %in% extra_inds) %>%
   arrange(Group) %>% 
   subset(Year <= 2021 & !is.na(Population))
 
-print("Total pop in 2021")
-print(pop_longitude %>% slice_max(Year) %>% arrange(-Population) %>% select(Group, Location, Population))
+cat("Total pop in 2021")
+pop_longitude %>% slice_max(Year) %>% arrange(-Population) %>% select(Group, Location, Population)
 
 multi_city_pop_plot <- ggplot(pop_longitude) +
   geom_line(aes(x = Year, y = `Population`, group = Location, color = Group)) +
@@ -838,8 +837,8 @@ emp_longitude <- oxford %>% subset(Indicator %in% extra_inds) %>%
   arrange(Group) %>% 
   subset(Year <= 2021 & !is.na(`Total employed`))
 
-print("Total employed in 2021")
-print(emp_longitude %>% slice_max(Year) %>% arrange(-`Total employed`) %>% select(Group, Location, `Total employed`))
+cat("Total employed in 2021")
+emp_longitude %>% slice_max(Year) %>% arrange(-`Total employed`) %>% select(Group, Location, `Total employed`)
 
 ggplot(emp_longitude) +
   geom_line(aes(x = Year, y = `Total employed`, group = Location, color = Group)) +
@@ -892,8 +891,8 @@ gdp_longitude <- oxford %>% subset(Indicator %in% extra_inds) %>%
   arrange(Group) %>% 
   subset(Year <= 2021 & !is.na(`GDP`))
 
-print("Total GDP in 2021")
-print(gdp_longitude %>% slice_max(Year) %>% arrange(-GDP) %>% select(Group, Location, GDP))
+cat("Total GDP in 2021")
+gdp_longitude %>% slice_max(Year) %>% arrange(-GDP) %>% select(Group, Location, GDP)
 
 ggplot(gdp_longitude) +
   geom_line(aes(x = Year, y = `GDP`, group = Location, color = Group)) +
@@ -976,7 +975,7 @@ gdppc_longitude_plot <- ggplot(gdppc_longitude) +
                   hjust = 0, size = 3, xlim = c(2021.25, 2030), box.padding = 0.05, direction = "y")
 ggsave("plots/oxford-gdp-per-capita_line.png", gdppc_longitude_plot, device = "png",
        width = 8, height = 6.5, units = "in", dpi = "print")
-print(gdppc_longitude_plot)
+gdppc_longitude_plot
 }
 ```
 
@@ -1009,8 +1008,8 @@ emp_shares2 <- emp_shares2 %>%
 
 emp_shares2 <- emp_shares2 %>%
   mutate(Share = case_when(Indicator == "Other" & Group == "Benchmark" ~ Share * 2 / 6, T ~ Share))
-print("Sectors by employment")
-print(emp_shares2)
+cat("Sectors by employment")
+emp_shares2
 
 # Gross value added, by sector ----
 # Data is with employment above
@@ -1058,7 +1057,7 @@ emp_shares_plot <- emp_shares2 %>%
   labs(title = paste("Share of employment by sector in", city, "and median benchmark city"),
        x = "Sector",
        fill = "")
-print(emp_shares_plot)
+emp_shares_plot
 ggsave("plots/oxford-employment-sectors.png", plot = emp_shares_plot, device = "png",
        width = 16, height = 5, units = "in", dpi = "print")
 }
@@ -1067,8 +1066,8 @@ ggsave("plots/oxford-employment-sectors.png", plot = emp_shares_plot, device = "
 
 ```{r, echo = F}
 if (in_oxford) {
-  print("Sectors by GVA")
-  print(gva_shares2)
+  cat("Sectors by GVA")
+  gva_shares2
 gva_shares_plot <- gva_shares2 %>%
   # arrange(Group, desc(Share)) %>%
   # mutate(Indicator = str_replace(Indicator, "Transport, storage, information & communication services", "Transport & ICT"),
@@ -1090,7 +1089,7 @@ gva_shares_plot <- gva_shares2 %>%
   labs(title = paste("Share of GVA by sector in", city, "and median benchmark city"),
        x = "Sector",
        fill = "")
-print(gva_shares_plot)
+gva_shares_plot
 ggsave("plots/oxford-gva-sectors.png", plot = gva_shares_plot, device = "png",
        width = 16, height = 5, units = "in", dpi = "print")
 }
@@ -1205,16 +1204,16 @@ uba_plot <- wsf %>%
   theme(axis.line = element_line(linewidth = .5, color = "black"))
 ggsave("plots/wsf-uba-plot.png", plot = uba_plot, device = "png",
        width = 4, height = 3.5, units = "in", dpi = "print")
-print(uba_plot)
+uba_plot
 
 first_area <- wsf$uba_km2[1]
 latest_area <- tail(wsf$uba_km2, 1)
 first_year <- wsf$Year[1]
 latest_year <- tail(wsf$Year, 1)
 pct_growth <- 100 * (latest_area - first_area)/first_area
-print(paste0("The city's built-up area grew from ", round(first_area, 2), " km^2 in ", first_year, " to ", round(latest_area, 2), " in ", latest_year, " for ", round(pct_growth, 2), "% growth"))
+cat(paste0("The city's built-up area grew from ", round(first_area, 2), " km^2 in ", first_year, " to ", round(latest_area, 2), " in ", latest_year, " for ", round(pct_growth, 2), "% growth"))
 
-print(wsf)
+wsf
 # mean(head(wsf$growth, 10), na.rm = T)
 # mean(head(wsf$growth_km2, 10), na.rm = T)
 # 
@@ -1264,7 +1263,7 @@ lc <- read_xlsx("Stats/Landcover.xlsx", skip = 1,
   arrange(desc(Percent))  %>% 
   mutate(`Land Cover` = factor(`Land Cover`, levels = `Land Cover`)) %>%
   mutate(Percent = round(Percent, 4))
-print(lc)
+lc
 # lc %>% arrange(desc(Percent)) %>% View()
 
 lc_colors <- c(
@@ -1361,8 +1360,8 @@ lc2_pct <- lc$Percent[2] %>% scales::percent(0.1)
 lc3 <- lc$`Land Cover`[3]
 lc3_pct <- lc$Percent[3] %>% scales::percent(0.1)
 
-print(paste0(lc1, " comprises the majority of land in the ", city, " area of interest (", lc1_pct, "%)."))
-print(paste0("The next largest land classes are ", lc2, " (", lc2_pct, "%) and ", lc3, " (", lc3_pct, "%)"))
+cat(paste0(lc1, " comprises the majority of land in the ", city, " area of interest (", lc1_pct, "%)."))
+cat(paste0("The next largest land classes are ", lc2, " (", lc2_pct, "%) and ", lc3, " (", lc3_pct, "%)"))
 ```
 
 ### Elevation
@@ -1537,7 +1536,7 @@ fu_plot <- fu %>%
        y = bquote('Exposed'~km^2)) +
   theme(axis.line = element_line(linewidth = .5, color = "black"),
         axis.title.x = element_blank())
-print(fu_plot)
+fu_plot
 ggsave("plots/wsf-fu-plot.png", plot = fu_plot, device = "png",
        width = 4, height = 3.5, units = "in", dpi = "print")
 # fu %>%
@@ -1553,11 +1552,11 @@ ggsave("plots/wsf-fu-plot.png", plot = fu_plot, device = "png",
 #   theme(axis.line = element_line(linewidth = .5, color = "black"),
 #         axis.title.x = element_blank())
 
-print(flood_string("fu"))
-print(fu)
-print(bind_rows(head(fu, 1), tail(fu, 1)))
-print(paste("In", fu[1,1], ",", round(fu[1,2], 2), "km^2 of the built-up area was exposed to river flooding at a minimum depth of 15 cm"))
-print(paste("Percentage of highest populated area exposed to fluvial flooding:", flood_pop_area("fu")$Percentage %>% scales::percent()))
+flood_string("fu")
+fu
+bind_rows(head(fu, 1), tail(fu, 1))
+cat(paste("In", fu[1,1], ",", round(fu[1,2], 2), "km^2 of the built-up area was exposed to river flooding at a minimum depth of 15 cm"))
+cat(paste("Percentage of highest populated area exposed to fluvial flooding:", flood_pop_area("fu")$Percentage %>% scales::percent()))
 }
 ```
 
@@ -1594,11 +1593,11 @@ ggsave("plots/wsf-pu-plot.png", plot = pu_plot, device = "png",
 #   theme(axis.line = element_line(linewidth = .5, color = "black"),
 #         axis.title.x = element_blank())
 
-print(flood_string("pu"))
-print(pu)
-print(bind_rows(head(pu, 1), tail(pu, 1)))
-paste("In", pu[1,1], ",", round(pu[1,2], 2), "km^2 of the built-up area was exposed to surface water flooding at a minimum depth of 15 cm")
-print(paste("Percentage of highest populated area exposed to pluvial flooding:", flood_pop_area("pu")$Percentage %>% scales::percent()))
+flood_string("pu")
+pu
+bind_rows(head(pu, 1), tail(pu, 1))
+cat(paste("In", pu[1,1], ",", round(pu[1,2], 2), "km^2 of the built-up area was exposed to surface water flooding at a minimum depth of 15 cm"))
+cat(paste("Percentage of highest populated area exposed to pluvial flooding:", flood_pop_area("pu")$Percentage %>% scales::percent()))
 
 # pu %>% mutate(diff = pu$uba_km2 - lag(pu$uba_km2)) %>% .$diff %>% mean(na.rm = T) 
 }
@@ -1648,25 +1647,25 @@ ggsave("plots/wsf-pufu-plot.png", plot = pufu_plot, device = "png",
 #         axis.title.x = element_blank())
 
 comb <- subset(pufu, type == "Combined")
-print(flood_string("comb"))
+flood_string("comb")
 # comb %>% mutate(diff = comb$uba_km2 - lag(comb$uba_km2)) %>% .$diff %>% mean(na.rm = T) 
-print(bind_rows(head(comb, 1), tail(comb, 1)))
-print(paste("In", comb[1,1], ",", round(comb[1,2], 2), "km^2 of the built-up area was exposed to river or surface water flooding at a minimum depth of 15 cm"))
-print(paste("Percentage of highest populated area exposed to combined flooding:", flood_pop_area("comb")$Percentage %>% scales::percent()))
+bind_rows(head(comb, 1), tail(comb, 1))
+cat(paste("In", comb[1,1], ",", round(comb[1,2], 2), "km^2 of the built-up area was exposed to river or surface water flooding at a minimum depth of 15 cm"))
+cat(paste("Percentage of highest populated area exposed to combined flooding:", flood_pop_area("comb")$Percentage %>% scales::percent()))
 }
 ```
 
 ## Flood Events
 ```{r, echo = F}
 flood_archive <- read_sf(flood_archive_file)
-aoi <- read_sf("AOI")
+aoi <- read_sf("AOI") %>% st_transform("EPSG:4326")
 
 flood_archive <- st_make_valid(flood_archive)
 flood_archive <- flood_archive[st_is_valid(flood_archive),]
 aoi <- st_transform(aoi, crs = st_crs(flood_archive))
 flood_archive <- flood_archive[st_intersects(flood_archive, aoi, sparse = F),]
 
-paste("Map of floods")
+cat("Map of floods")
 ggplot(flood_archive) +
   geom_sf(aes(fill = DEAD)) +
   geom_sf(data = aoi)
@@ -1674,15 +1673,15 @@ ggplot(flood_archive) +
 floods <- st_drop_geometry(flood_archive) %>%
   select(BEGAN, ENDED, DEAD, DISPLACED, MAINCAUSE, SEVERITY)
 
-print("Tally of flood events")
-print(summarize(floods, count = n(), across(.cols = c(DEAD, DISPLACED), sum), .groups = "drop"))
-print("Median flood event")
-print(floods %>% mutate(
-    duration = as.numeric(ENDED - BEGAN)) %>%
-  summarize(across(.cols = c(DEAD, DISPLACED, duration), median), .groups = "drop"))
+cat("Tally of flood events")
+summarize(floods, count = n(), across(.cols = c(DEAD, DISPLACED), sum), .groups = "drop")
+cat("Median flood event")
+floods %>% mutate(
+  duration = as.numeric(ENDED - BEGAN)) %>%
+  summarize(across(.cols = c(DEAD, DISPLACED, duration), median), .groups = "drop")
 
-print("Causes of flood events")
-print(count(floods, MAINCAUSE))
+cat("Causes of flood events")
+count(floods, MAINCAUSE)
 flood_text <- floods %>% mutate(
   severity = case_when(SEVERITY == 1 ~ "Large event", SEVERITY == 1.5 ~ "Very large event", SEVERITY == 2 ~ "Extreme event"),
   duration = paste(ENDED - BEGAN, "days"),
@@ -1711,7 +1710,7 @@ x_axis_ticks <- tibble(date = c(as.Date("1985-01-01"), seq(as.Date("1990-01-01")
 x_axis_years <- data.frame(x = seq(as.Date("1984-01-01"), as.Date("2020-12-31"), by = "years"), y = 0)
 x_axis_months <- data.frame(x = seq(as.Date("1984-01-01"), as.Date("2020-12-31"), by = "2 months"), y = 0)
 
-print(flood_text %>% select(BEGAN, text))
+flood_text %>% select(BEGAN, text)
 
 ggplot(flood_text) +
   geom_point(aes(x = BEGAN), y = 0) +
@@ -1735,7 +1734,7 @@ ggsave("plots/darthmouth_flood_events.pdf", device = "pdf",
 
 ## Earthquakes
 ```{r, echo = F}
-get_earthquake_data <- function(country) {
+get_earthquake_data <- function() {
   library(httr)
   COUNTRY <- toupper(country) # because `country` is also a column name
   url <- "http://www.ngdc.noaa.gov/hazel/hazard-service/api/v1/earthquakes"
@@ -1760,7 +1759,7 @@ damages <- c("0" = "None",
              "3" = "Severe",
              "4" = "Extreme")
 
-eq <- get_earthquake_data(country)
+eq <- get_earthquake_data()
 # eq <- read_csv("../turkiye-earthquakes.csv")
 
 # as.Date("2020-12-31") - as.Date("1984-01-01")
@@ -1772,6 +1771,7 @@ eq <- get_earthquake_data(country)
 y_ratio <- 51498 / 13514
 # 3.324 
 
+aoi <- read_sf("AOI") %>% st_transform("EPSG:4326")
 city_point <- aoi %>% st_centroid()
 
 eq_text <- eq %>%
@@ -1827,9 +1827,7 @@ eq_lines <- eq_text_select %>%
 x_axis <- tibble(date = c(seq(as.Date("1900-01-01"),as.Date("2022-12-31"), by = "50 year"), as.Date("2020-01-01")), year = lubridate::year(date)) %>%
   bind_rows(tibble(date = seq(as.Date("1900-01-01"),as.Date("2022-12-31"), by = "10 year"), year = NA))
 
-library(ggh4x)
-
-print(eq_text)
+if (nrow(eq_text) > 0) eq_text # For some reason errors if 0 rows
 
 ggplot(eq_text) +
   geom_point(aes(x = BEGAN), y = 0) +
@@ -1852,7 +1850,6 @@ ggsave("plots/ngdc-earthquake-events.pdf", device = "pdf",
 #   bind_cols(distance = st_distance(city_point, eq_text) %>% as.vector()) %>%
 #   ggplot(aes(x = )) +
 
-library(units)
 # ggplot(eq_text, aes(x = distance, y = eqMagnitude, alpha = BEGAN, color = (2000 - units::drop_units(distance)) * eqMagnitude)) +
 # Plot earthquakes by distance and magnitude
 # ggplot(eq_text, aes(x = distance, y = eqMagnitude, color = (2000 - units::drop_units(distance)) * eqMagnitude)) +
@@ -1866,7 +1863,7 @@ library(units)
 files <- list.files(pv_path) %>% 
   subset(stringr::str_detect(., ".tif$"))
 
-aoi <- read_sf("AOI")
+aoi <- read_sf("AOI") %>% st_transform("EPSG:4326")
 
 monthly_pv <- lapply(files, function(f) {
   m <- f %>% substr(7, 8) %>% as.numeric()
@@ -1879,7 +1876,7 @@ monthly_pv <- lapply(files, function(f) {
   return(c(month = m, max = max, min = min, mean = mean, sum = sum))
 }) %>% bind_rows()
 
-print(monthly_pv)
+monthly_pv
 
 monthly_pv %>%
   mutate(daily = mean/lubridate::days_in_month(month)) %>%
@@ -1929,7 +1926,7 @@ missing_plots <- filter(slide_list, filename %ni% plots & type == "plot") %>%
 # warning(paste0("missing maps:\n", paste(missing_maps$warning_message, collapse = "\n")))
 
 if (nrow(missing_plots) > 0) {
-  print("The following plots have not been made. Why not?")
-  print(missing_plots %>% select(slide, filename, warning_text))
+  cat("The following plots have not been made. Why not?")
+  missing_plots %>% select(slide, filename, warning_text)
 }
 ```
