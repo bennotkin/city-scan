@@ -1266,7 +1266,9 @@ wsf
 ```{r, echo = F}
 lc <- read_xlsx("Stats/Landcover.xlsx", skip = 1,
                 col_names = c("Land Cover", "Value", "Count", "Percent")) %>%
-  remove_missing(na.rm = T) %>%
+  # remove_missing(na.rm = T) %>%
+  filter(!is.na(`Land Cover`)) %>%
+  mutate(Percent = Count/sum(Count)) %>%
   arrange(desc(Percent))  %>% 
   mutate(`Land Cover` = factor(`Land Cover`, levels = `Land Cover`)) %>%
   mutate(Percent = round(Percent, 4))
@@ -1480,7 +1482,7 @@ ggsave("plots/wsf-slope-pieplot.png", device = "png",
 ```{r, echo = F}
 flood_string <- function(flood_type) {
   osmpt <- read_xls(paste0("Stats/", flood_type, "_osmpt.xls"))[,1:4] %>% distinct()
-  major_roads <- read_xls(paste0("Stats/", flood_type, "_majorroad.xls"))
+  major_roads <- read_xls(paste0("Stats/", flood_type, "_majorroad.xls")) %>% tryCatch(error = function(e) return(data.frame(OID = 0, gridcode = 0, LENGTH = 0, PERCENTAGE = 0)))
 
   roads_pct <- major_roads$PERCENTAGE[major_roads$gridcode == 1] %>% round(0)
   police_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_police" & osmpt$gridcode == 1]
