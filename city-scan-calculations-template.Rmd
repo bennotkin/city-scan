@@ -1745,7 +1745,6 @@ ggsave("plots/darthmouth_flood_events.pdf", device = "pdf",
 ```{r, echo = F}
 get_earthquake_data <- function() {
   library(httr)
-  COUNTRY <- toupper(country) # because `country` is also a column name
   url <- "http://www.ngdc.noaa.gov/hazel/hazard-service/api/v1/earthquakes"
   payload <- ""
   encode <- "raw"
@@ -1753,8 +1752,7 @@ get_earthquake_data <- function() {
                    content_type("application/octet-stream"),
                    set_cookies(`csrftoken` = "CJOWAoXjdFb7fL1Xf3asS9mj6GVJmbvvIKj365nRxupF27lO5UfkZECjtZoHLuuD"),
                    encode = encode,
-                   query = list(#country = COUNTRY,
-                                minYear = 1900),
+                   query = list(minYear = 1900),
                                 maxYear = lubridate::year(Sys.Date()))
   eq_json <- content(response, "text")
   eq <- jsonlite::fromJSON(eq_json) %>% .[[1]] %>%
@@ -1829,6 +1827,7 @@ eq_text_select <- eq_text %>% slice_max(magXdist, n = 10) %>%
 
 eq_lines <- eq_text_select %>%
   select(BEGAN, above_line, node_x, node_y) %>%
+  mutate(id = row_number()) %>%
   { bind_rows(.,
               mutate(., node_x = BEGAN, node_y = (y_ratio-1) * above_line * 466 / 2),
               mutate(., node_x = BEGAN, node_y = 0)) }
@@ -1844,7 +1843,7 @@ ggplot(eq_text) +
   geom_text(data = eq_text_select, aes(x = node_x + 50*y_ratio, y = node_y-120*y_ratio, label = text, hjust = (above_line + 1)/2), angle = 30, lineheight = 1) +
   scale_x_date(limits = c(as.Date("1895-01-01"),as.Date("2025-12-31")), expand = c(0,0)) +
   scale_y_continuous(limits = y_ratio * c(-1800, 1800), breaks = c(1825,3650)) +
-  geom_path(data = eq_lines, aes(x = node_x, y = node_y, group = BEGAN))  +
+  geom_path(data = eq_lines, aes(x = node_x, y = node_y, group = id))  +
   geom_hline(yintercept = 0, linetype = "dotted") + 
   geom_point(data = x_axis, aes(x = date-15, y = 0), pch = "|", size = 4) +
   geom_point(data = x_axis, aes(x = date+15, y = 0), pch = "|", size = 4) +
