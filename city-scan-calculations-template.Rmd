@@ -1283,7 +1283,8 @@ lc_colors <- c(
   "cropland" = "#e49634",
   "water bodies" = "#429bdf",
   "shrubland" = "#dfc25a",
-  "herbaceous wetland" = "#7d87c4")
+  "herbaceous wetland" = "#7d87c4",
+  "mangroves" = "#00cf75")
 
 # lc %>%
 #   ggplot() +

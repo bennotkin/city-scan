@@ -7,11 +7,6 @@ plot,oxford-age-structure-area.png,Population Distribution by Age,3,2,oxford,Che
 plot,oxford-pop-distro.png,Population Distribution by Age,3,2,all,May come from Oxford of WorldPop
 plot,world-pop-age-sex.png,Population Distribution by Age & Sex,3,3,all,
 map,map_POP.png,Population Density,3,4,all,
-map,map_POP_elderly.png,Demographics,3,5,Multiple zones,Only included if there are 3+ statistical zones shown on map
-map,map_POP_reproductive.png,Demographics,3,5,Multiple zones,Only included if there are 3+ statistical zones shown on map
-map,map_POP_sex_ratio.png,Demographics,3,5,Multiple zones,Only included if there are 3+ statistical zones shown on map
-map,map_POP_under5.png,Demographics,3,5,Multiple zones,Only included if there are 3+ statistical zones shown on map
-map,map_POP_youth.png,Demographics,3,5,Multiple zones,Only included if there are 3+ statistical zones shown on map
 map,map_rwi.png,Relative Wealth Index,3,6,all,
 map,map_SD.png,Difficulty of Social Distancing,3,7,Africa only,Only provided for cities in Africa
 plot,oxford-national-shares.png,"Cities' Shares of National Population, Employment & GDP",4,1,oxford,
