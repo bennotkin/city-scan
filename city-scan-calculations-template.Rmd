@@ -1565,12 +1565,12 @@ ggsave("plots/wsf-fu-plot.png", plot = fu_plot, device = "png",
 #   theme(axis.line = element_line(linewidth = .5, color = "black"),
 #         axis.title.x = element_blank())
 
-flood_string("fu")
 fu
 bind_rows(head(fu, 1), tail(fu, 1))
 cat(paste("In", fu[1,1], ",", round(fu[1,2], 2), "km^2 of the built-up area was exposed to river flooding at a minimum depth of 15 cm"))
 cat(paste("Percentage of highest populated area exposed to fluvial flooding:", flood_pop_area("fu")$Percentage %>% scales::percent()))
 }
+flood_string("fu")
 ```
 
 ### Pluvial
@@ -1606,7 +1606,6 @@ ggsave("plots/wsf-pu-plot.png", plot = pu_plot, device = "png",
 #   theme(axis.line = element_line(linewidth = .5, color = "black"),
 #         axis.title.x = element_blank())
 
-flood_string("pu")
 pu
 bind_rows(head(pu, 1), tail(pu, 1))
 cat(paste("In", pu[1,1], ",", round(pu[1,2], 2), "km^2 of the built-up area was exposed to surface water flooding at a minimum depth of 15 cm"))
@@ -1614,6 +1613,7 @@ cat(paste("Percentage of highest populated area exposed to pluvial flooding:", f
 
 # pu %>% mutate(diff = pu$uba_km2 - lag(pu$uba_km2)) %>% .$diff %>% mean(na.rm = T) 
 }
+flood_string("pu")
 ```
 
 ### Combined Fluvial & Pluvial
@@ -1660,12 +1660,12 @@ ggsave("plots/wsf-pufu-plot.png", plot = pufu_plot, device = "png",
 #         axis.title.x = element_blank())
 
 comb <- subset(pufu, type == "Combined")
-flood_string("comb")
 # comb %>% mutate(diff = comb$uba_km2 - lag(comb$uba_km2)) %>% .$diff %>% mean(na.rm = T) 
 bind_rows(head(comb, 1), tail(comb, 1))
 cat(paste("In", comb[1,1], ",", round(comb[1,2], 2), "km^2 of the built-up area was exposed to river or surface water flooding at a minimum depth of 15 cm"))
 cat(paste("Percentage of highest populated area exposed to combined flooding:", flood_pop_area("comb")$Percentage %>% scales::percent()))
 }
+flood_string("comb")
 ```
 
 ## Flood Events
