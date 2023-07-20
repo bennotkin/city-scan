@@ -27,6 +27,9 @@ library(units)
 country_groups <- read_csv("https://raw.githubusercontent.com/compoundrisk/monitor/databricks/src/country-groups.csv")
 source("https://raw.githubusercontent.com/compoundrisk/monitor/databricks/src/fns/helpers.R")
 tolatin <- function(x) stringi::stri_trans_general(x, id = "Latin-ASCII")
+normalize <- function(x, na.rm = T) {
+    return((x - min(x, na.rm = na.rm)) /(max(x, na.rm = na.rm)-min(x, na.rm = na.rm)))
+}
 ```
 
 ```{r, echo = F}
@@ -1692,19 +1695,27 @@ floods %>% mutate(
 
 cat("Causes of flood events")
 count(floods, MAINCAUSE)
-flood_text <- floods %>% mutate(
+
+flood_text_all <- floods %>% mutate(
   severity = case_when(SEVERITY == 1 ~ "Large event", SEVERITY == 1.5 ~ "Very large event", SEVERITY == 2 ~ "Extreme event"),
   duration = paste(ENDED - BEGAN, "days"),
   fatalities = paste(scales::label_comma()(DEAD), "fatalities"),
   displaced = paste(scales::label_comma()(DISPLACED), "displaced"),
   line1 = toupper(paste(lubridate::month(BEGAN, label = T, abbr = F), lubridate::year(BEGAN))),
-  line2 = paste(severity, tolower(MAINCAUSE), sep = ", "),
+  line2 = paste(severity, (MAINCAUSE), sep = ", "),
   line3 = paste(as.character(duration), fatalities, displaced, sep = ", "),
   text = paste(line1, line2, line3, sep = "\n"),
-  above_line = 2*(row_number() %% 2) - 1) %>% 
-  select(BEGAN, ENDED, text, above_line)
+  above_line = 2*(row_number() %% 2) - 1)
 
+flood_text <- if (nrow(flood_text_all) > 15) {
+  flood_text_all %>%
+    mutate(mag = normalize(DEAD) * normalize(DISPLACED) * SEVERITY) %>%
+    slice_max(mag, n = 10)
+} else  {
+  flood_text_all
+}
 flood_text <- flood_text %>%
+  select(BEGAN, ENDED, text, above_line) %>%
   mutate(node_x = BEGAN + 1460*above_line,
          node_y = above_line * (1460 * tanpi(1/6) + 466/2) )
 
@@ -1720,10 +1731,11 @@ x_axis_ticks <- tibble(date = c(as.Date("1985-01-01"), seq(as.Date("1990-01-01")
 x_axis_years <- data.frame(x = seq(as.Date("1984-01-01"), as.Date("2020-12-31"), by = "years"), y = 0)
 x_axis_months <- data.frame(x = seq(as.Date("1984-01-01"), as.Date("2020-12-31"), by = "2 months"), y = 0)
 
-flood_text %>% select(BEGAN, text)
+
+flood_text_all %>% select(BEGAN, text)
 
 ggplot(flood_text) +
-  geom_point(aes(x = BEGAN), y = 0) +
+  geom_point(data = flood_text_all, aes(x = BEGAN), y = 0) +
   # geom_point(aes(x = node_x, y = node_y)) +
   geom_text(aes(x = node_x + 30, y = node_y-50, label = text, hjust = (above_line + 1)/2), angle = 30, lineheight = 1) +
   scale_x_date(limits = c(as.Date("1984-01-01"),as.Date("2020-12-31")), expand = c(0,0)) +
