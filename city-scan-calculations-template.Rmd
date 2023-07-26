@@ -28,13 +28,13 @@ country_groups <- read_csv("https://raw.githubusercontent.com/compoundrisk/monit
 source("https://raw.githubusercontent.com/compoundrisk/monitor/databricks/src/fns/helpers.R")
 tolatin <- function(x) stringi::stri_trans_general(x, id = "Latin-ASCII")
 normalize <- function(x, na.rm = T) {
-    return((x - min(x, na.rm = na.rm)) /(max(x, na.rm = na.rm)-min(x, na.rm = na.rm)))
+  return((x - min(x, na.rm = na.rm)) /(max(x, na.rm = na.rm)-min(x, na.rm = na.rm)))
 }
 
-  # Change the print type depending on whether document is run interactively or from `rmarkdown::render()`
+# Change the print type depending on whether document is run interactively or from `rmarkdown::render()`
 # This is because a single function (such as `if(in_oxford)` can only print one result)
-  # from_render is defined in render-current-scans.R
-  # when rendering, must also set results to "asis" if ysing print_paged_df
+# from_render is defined in render-current-scans.R
+# when rendering, must also set results to "asis" if ysing print_paged_df
 interactive_run <- if (exists("from_render")) F else T
 results_type <- if (exists("from_render")) "asis" else "markup"
 
@@ -85,13 +85,13 @@ if (nrow(occasional_maps > 0)) {
 
 missing_maps <- filter(slide_list, filename %ni% maps & type == "map" & slide != "Not shown")
 # Use the following to make a warning instead of printing a table
-  # mutate(
-  #   slide_number = paste(section, section_order, sep = "."),
-  #   # gap = 27 - nchar(filename),
-  #   slide = leading_zeros(substr(slide, 1, 10), length = 10, filler = " ", trailing = T),
-  #   filename = leading_zeros(filename, length = 28, filler = " ", trailing = T),
-  #   warning_message = paste0(slide, ": ", filename, warning_text),
-  #   .keep = "none")
+# mutate(
+#   slide_number = paste(section, section_order, sep = "."),
+#   # gap = 27 - nchar(filename),
+#   slide = leading_zeros(substr(slide, 1, 10), length = 10, filler = " ", trailing = T),
+#   filename = leading_zeros(filename, length = 28, filler = " ", trailing = T),
+#   warning_message = paste0(slide, ": ", filename, warning_text),
+#   .keep = "none")
 # warning(paste0("missing maps:\n", paste(missing_maps$warning_message, collapse = "\n")))
 
 if (nrow(missing_maps) > 0) {
@@ -116,7 +116,7 @@ coords <- st_centroid(aoi) %>% st_coordinates() %>% suppressWarnings()
 names(coords) <- c("Lon", "Lat")       
 koeppen <- read_csv(koeppen_file, col_types = "ddc")
 koeppen_city <- subset(koeppen, between(Lon, coords["Lon"] - .5, coords["Lon"] + .5) &  
-  between(Lat, coords["Lat"] - .5, coords["Lat"] + .5)) %>%
+                         between(Lat, coords["Lat"] - .5, coords["Lat"] + .5)) %>%
   .$Cls %>% unique()
 # Find class here: https://en.wikipedia.org/wiki/Köppen_climate_classification
 print_text(paste("Köppen climate classification:", koeppen_city))
@@ -124,12 +124,12 @@ print_text(paste("Köppen climate classification:", koeppen_city))
 
 ```{r, echo = F}
 # Defining the UN Data and citypopulation.de pop function because it is used as backup in Oxford and in Density
-  get_un_pop_growth <- function(city, country = country) {
-    # UN Data
-    if (!file.exists(undata_file)) {
-      warning(paste0("undata_file (", undata_file, ") does not exist."))
-      return(NULL)
-      } else {
+get_un_pop_growth <- function(city, country = country) {
+  # UN Data
+  if (!file.exists(undata_file)) {
+    warning(paste0("undata_file (", undata_file, ") does not exist."))
+    return(NULL)
+  } else {
     pop_growth_undata <- read_csv(undata_file,
                                   col_types = "cdccccccddc", n_max = 69490) %>%
       filter(`Country or Area` == country) %>%
@@ -139,57 +139,57 @@ print_text(paste("Köppen climate classification:", koeppen_city))
       mutate(Source = "UN Data") %>%
       arrange(Year)
     return(pop_growth_undata)
-    }
-  }  
-    
-  get_de_pop_growth <- function(city, country = country) {
-    # citypopulation.de
-    url <- paste0("https://www.citypopulation.de/en/", tolower(country), "/cities/")
+  }
+}  
+
+get_de_pop_growth <- function(city, country = country) {
+  # citypopulation.de
+  url <- paste0("https://www.citypopulation.de/en/", tolower(country), "/cities/")
+  de <- read_html(url) %>%
+    html_node("section#citysection") %>%
+    html_node("table") %>%
+    html_table()
+  
+  if (!any(str_detect(tolatin(de$Name), tolatin(city)))) {
     de <- read_html(url) %>%
-      html_node("section#citysection") %>%
+      html_node("section#largecities") %>%
       html_node("table") %>%
       html_table()
-    
-    if (!any(str_detect(tolatin(de$Name), tolatin(city)))) {
-      de <- read_html(url) %>%
-        html_node("section#largecities") %>%
-        html_node("table") %>%
-        html_table()
-    }
-    
-    if (!any(str_detect(tolatin(de$Name), tolatin(city)))) {
-      de <- read_html(url) %>%
-        html_node("section#adminareas") %>%
-        html_node("table") %>%
-        html_table()
-    }
-    
-    pop_growth_de <- de %>%
-      select(Location = Name, contains("Population"), Area = starts_with("Area")) %>%
-      filter(str_detect(tolatin(Location), tolatin(city))) %>%
-      pivot_longer(cols = contains("Population"), values_to = "Population", names_to = "Year") %>%
-      mutate(
-        Location = Location,
-        Year = str_extract(Year, "\\d{4}") %>% as.numeric(),
-             Population = str_replace_all(Population, ",", "") %>% as.numeric(),
-         Source = "citypopulation.de",
-         Area_km = as.numeric(Area)/100,
-       .keep = "unused") %>%
-      arrange(Year)
-    
-    if (nrow(pop_growth_de) == 0) warning("No population data detected in citypopulation.de table")
-    if (length(unique(pop_growth_de$Location)) > 1) warning("More than one city name in citypopulation.de table")
-    
-    return(pop_growth_de)
   }
+  
+  if (!any(str_detect(tolatin(de$Name), tolatin(city)))) {
+    de <- read_html(url) %>%
+      html_node("section#adminareas") %>%
+      html_node("table") %>%
+      html_table()
+  }
+  
+  pop_growth_de <- de %>%
+    select(Location = Name, contains("Population"), Area = starts_with("Area")) %>%
+    filter(str_detect(tolatin(Location), tolatin(city))) %>%
+    pivot_longer(cols = contains("Population"), values_to = "Population", names_to = "Year") %>%
+    mutate(
+      Location = Location,
+      Year = str_extract(Year, "\\d{4}") %>% as.numeric(),
+      Population = str_replace_all(Population, ",", "") %>% as.numeric(),
+      Source = "citypopulation.de",
+      Area_km = as.numeric(Area)/100,
+      .keep = "unused") %>%
+    arrange(Year)
+  
+  if (nrow(pop_growth_de) == 0) warning("No population data detected in citypopulation.de table")
+  if (length(unique(pop_growth_de$Location)) > 1) warning("More than one city name in citypopulation.de table")
+  
+  return(pop_growth_de)
+}
 
 un_de_pop_growth <- function(city, country) {
-    # Select whether to use citypopulation.de or UN data based on which has more data
-    # Alternatively, can plot both, coloring each line by Source column
-    pop_growth <- bind_rows(get_un_pop_growth(city, country),
-                            get_de_pop_growth(city, country))
-    return(pop_growth)
-  }
+  # Select whether to use citypopulation.de or UN data based on which has more data
+  # Alternatively, can plot both, coloring each line by Source column
+  pop_growth <- bind_rows(get_un_pop_growth(city, country),
+                          get_de_pop_growth(city, country))
+  return(pop_growth)
+}
 ```
 
 ## Oxford
@@ -210,9 +210,9 @@ if (length(pop) > 0) {
   pop <- pop/1000
   print_text(paste("pop:", scales::label_comma()(pop * 1000)))
   if (length(pop) == 0) {
-  pop <- population_manual/1000
+    pop <- population_manual/1000
   }
-  }
+}
 
 # Select all cities in nearby countries
 nearby_cities <- oxford_full %>% 
@@ -247,7 +247,7 @@ oxford_full %>%
   subset(Location %in% bm_cities & Indicator == "Total population") %>%
   mutate(`2021` = `2021` * 1000) %>%
   arrange(Location)
-  
+
 
 # Print table of population of nearby cities not in benchmark list (OUTPUT)
 print_text("Nearby non-benchmark cities")
@@ -274,7 +274,7 @@ oxford %>%
   mutate(text = paste0(text, " (", Country,")")) %>%
   .$text %>% paste_and() %>%
   print_text()
-  
+
 countries <- oxford$Country %>% unique()
 oxford_countries <- subset(oxford_full, Country %in% countries) %>%
   subset(str_detect(Location, "- Total") | Location %in% countries, select = -Location)
@@ -292,34 +292,34 @@ extra_inds <- c("Total population", "Employment - Total", "GDP, real, US$ - Tota
 ### Population Growth
 ```{r, echo = F, results = "asis"}
 if (in_oxford) {
-pop_growth <- subset(oxford, Location == city & Indicator == "Total population") %>%
-  select(Location, contains("20")) %>% # View()
-  pivot_longer(cols = contains("20"), values_to = "Population", names_to = "Year") %>%
-  mutate(Year = as.numeric(Year), Population = 1000*Population) %>%
-  subset(Year <= 2021)
+  pop_growth <- subset(oxford, Location == city & Indicator == "Total population") %>%
+    select(Location, contains("20")) %>% # View()
+    pivot_longer(cols = contains("20"), values_to = "Population", names_to = "Year") %>%
+    mutate(Year = as.numeric(Year), Population = 1000*Population) %>%
+    subset(Year <= 2021)
 } else {
-# If no Oxford data, find what you can (which may require multiple sources):
+  # If no Oxford data, find what you can (which may require multiple sources):
   # Select whether to use citypopulation.de or UN data based on which has more data
   # Alternatively, can plot both, coloring each line by Source column
   pop_growth <- bind_rows(get_un_pop_growth(city, country),
                           get_de_pop_growth(city, country))
   
-larger_source <- sort(table(c(pop_growth$Source)), decreasing = T)[1] %>% names()
-pop_growth <- pop_growth %>%
-  filter(Source == larger_source) %>%
-  arrange(Year)
-if (nrow(pop_growth) == 0) {
-  warning("No population data from UN or citypopulation.de")
-
-# Other data source, manually downloaded/created
-  pop_growth <- read_xlsx("PATH.xlsx", sheet = 1) %>%
-    # mutate(Source = "Turkish Stastistical Institute") %>%
-    subset(City == city & !is.na(Population)) %>% arrange(Year)
-
-# If we want to display multiple sources
-# pop_growth <- bind_rows(pop_growth_1, pop_growth_2)
-# hues <- c("black", "dark grey") %>% #c(scales::hue_pal()(2)) %>% 
-# setNames(c(pop_growth_1$Source[1]), pop_growth_2$Source[1])
+  larger_source <- sort(table(c(pop_growth$Source)), decreasing = T)[1] %>% names()
+  pop_growth <- pop_growth %>%
+    filter(Source == larger_source) %>%
+    arrange(Year)
+  if (nrow(pop_growth) == 0) {
+    warning("No population data from UN or citypopulation.de")
+    
+    # Other data source, manually downloaded/created
+    pop_growth <- read_xlsx("PATH.xlsx", sheet = 1) %>%
+      # mutate(Source = "Turkish Stastistical Institute") %>%
+      subset(City == city & !is.na(Population)) %>% arrange(Year)
+    
+    # If we want to display multiple sources
+    # pop_growth <- bind_rows(pop_growth_1, pop_growth_2)
+    # hues <- c("black", "dark grey") %>% #c(scales::hue_pal()(2)) %>% 
+    # setNames(c(pop_growth_1$Source[1]), pop_growth_2$Source[1])
   }
 }
 
@@ -331,13 +331,13 @@ pop_growth_plot <- ggplot(pop_growth, aes(x = Year, y = Population)) + #, color 
   geom_point() +  
   scale_x_continuous(minor_breaks = seq(pop_min_year, pop_max_year, 1)) + 
   scale_y_continuous(limits = c(0, max(pop_growth$Population)), labels = scales::comma, expand = expansion(c(0, .1))) +    
-#   scale_color_manual(values = hues) +
+  #   scale_color_manual(values = hues) +
   theme_minimal() +
   labs(title = paste0(city, " Population Growth, ", pop_min_year, "-", pop_max_year)) +
   theme(axis.line = element_line(linewidth = .5, color = "black"),
         panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
         panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray"))
-        # legend.position = "bottom")
+# legend.position = "bottom")
 ggsave("plots/oxford-pop-growth.png", plot = pop_growth_plot, device = "png",
        width = 8, height = 5, units = "in", dpi = "print")
 
@@ -353,11 +353,11 @@ avg_growth <- (1 + pct_growth)^(1/(year_last - year_1)) - 1
 # vstring(city, "'s population increased by", pct_growth%, "from", pop_1, "in", year_1, "to", pop_last, "in", year_last, "at an average annual rate of", avg_growth, "%")
 paste0(
   city,
-   "'s population increased by ", 
-   scales::label_percent()(pct_growth),
-   " from ", scales::label_comma()(pop_1), " in ", year_1, " to ", scales::label_comma()(pop_last), " in ", year_last,
-   ", at an average annual rate of ", scales::label_percent(accuracy = 0.1)(avg_growth)) %>%
-   print_text()
+  "'s population increased by ", 
+  scales::label_percent()(pct_growth),
+  " from ", scales::label_comma()(pop_1), " in ", year_1, " to ", scales::label_comma()(pop_last), " in ", year_last,
+  ", at an average annual rate of ", scales::label_percent(accuracy = 0.1)(avg_growth)) %>%
+  print_text()
 
 # Print pop growth tables (OUTPUT)
 print_text("Yearly population, sorted by absolute growth")
@@ -406,7 +406,7 @@ non_oxford_pop <- non_oxford_cities %>%
     if (length(country_temp) != 0) if (country_temp != "") country <- country_temp
     data <- get_de_pop_growth(x, country = country)
     return(data)
-}) %>%
+  }) %>%
   bind_rows() %>%
   mutate(Location = str_extract(tolatin(Location), c(city, bm_cities) %>% paste(collapse = "|")))
 
@@ -468,85 +468,85 @@ density %>% arrange(-Density)
 #### Population distribution by Oxford Economics
 ```{r, echo = F, results = results_type}
 if (in_oxford) {
-pop_dist_long <- subset(oxford, Location %in% c(city, bm_cities) & Indicator %in% pop_dist_inds) %>%
-  select(Location, Indicator, `2021`, Group) %>%
-  # group_by(Group, Indicator) %>%
-  # summarize(`2021` = mean(`2021`)) %>%
-  mutate(Age_Bracket = substr(Indicator, 12, 20),
-         Age_Bracket = factor(Age_Bracket, levels = unique(Age_Bracket)),
-         Count = `2021`) %>%
-  select(Group, Location, Age_Bracket, Count) %>%
-  group_by(Location) %>%
-  mutate(Percentage = Count/sum(Count)) %>%
-  ungroup()
-
-pop_dist_group <- pop_dist_long %>% 
-  group_by(Location) %>%
-  mutate(Percentage = Count/sum(Count)) %>%
-  ungroup() %>%
-  group_by(Group, Age_Bracket) %>%
-  summarize(Percentage = median(Percentage), .groups = "keep") %>% 
-  mutate(Group = factor(Group, levels  = c(city, "Benchmark"))) %>%
-  mutate(order = case_when(Group == city ~ 1, T ~ 2)) %>%
-  arrange(order) %>%
-  mutate(Group = reorder(Group, order)) %>%
-  ungroup() %>% mutate(cumpct = cumsum(Percentage))
+  pop_dist_long <- subset(oxford, Location %in% c(city, bm_cities) & Indicator %in% pop_dist_inds) %>%
+    select(Location, Indicator, `2021`, Group) %>%
+    # group_by(Group, Indicator) %>%
+    # summarize(`2021` = mean(`2021`)) %>%
+    mutate(Age_Bracket = substr(Indicator, 12, 20),
+           Age_Bracket = factor(Age_Bracket, levels = unique(Age_Bracket)),
+           Count = `2021`) %>%
+    select(Group, Location, Age_Bracket, Count) %>%
+    group_by(Location) %>%
+    mutate(Percentage = Count/sum(Count)) %>%
+    ungroup()
+  
+  pop_dist_group <- pop_dist_long %>% 
+    group_by(Location) %>%
+    mutate(Percentage = Count/sum(Count)) %>%
+    ungroup() %>%
+    group_by(Group, Age_Bracket) %>%
+    summarize(Percentage = median(Percentage), .groups = "keep") %>% 
+    mutate(Group = factor(Group, levels  = c(city, "Benchmark"))) %>%
+    mutate(order = case_when(Group == city ~ 1, T ~ 2)) %>%
+    arrange(order) %>%
+    mutate(Group = reorder(Group, order)) %>%
+    ungroup() %>% mutate(cumpct = cumsum(Percentage))
   
   # Print population distribution (OUTPUT)
-print_paged_df(pop_dist_group)
-
-pop_distro_plot <- ggplot(pop_dist_group, aes(x = Age_Bracket, y = Percentage)) +
-  # geom_bar(stat = "identity", position = "dodge2") + 
-  geom_col(aes(fill = Group), position = "dodge") + 
-  labs(title = paste("Population distribution in", city, "and benchmark cities"),
-       y = "Percentage", x = "Age Bracket", fill = "") +
-  theme_minimal() +
-  theme(legend.position = "bottom",
-        legend.key.height = unit(1/8, "in"),
-        axis.line = element_line(linewidth = .5, color = "black"),
-        panel.grid.major.x = element_blank(),
-        panel.grid.minor.x = element_blank(),
-        panel.grid.major.y = element_line(linewidth = .125, color = "dark gray"),
-        panel.grid.minor.y = element_line(linewidth = .125, linetype = 2, color = "dark gray")
-        # panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
-        # panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray")
-        ) + 
-  scale_y_continuous(breaks = seq(0, .2, .01),
-                     labels = scales::percent_format(accuracy = 1),
-                     limits = c(0, ceiling(max(pop_dist_group$Percentage) * 100) /100),
-                     expand = c(0,0)) +
-  scale_fill_manual(values = hues)
-# limits = c(0,.1))
-ggsave("plots/oxford-pop-distro.png", plot = pop_distro_plot, device = "png",
-       width = 8, height = 6.5, units = "in", dpi = "print")
-
-# Print population distribution plot (OUTPUT)
-ggplot2:::print.ggplot(pop_distro_plot)
-
-# # Plotting histogram of focus city and lines for all other cities
-# # Probably better to use just one line for the median city
-# pop_dist_long %>%
-#   ggplot(aes(x = Age_Bracket, y = Percentage, group = Location)) +
-#   # geom_col(aes(fill = Location), position = "dodge")
-#   geom_col(data = pop_dist_long %>% filter(Location == city)) +
-#   geom_line(color = "dark grey") +
-#  labs(title = paste("Population distribution in", city, "and benchmark cities"),
-#        y = "Percentage", x = "Age Bracket", fill = "") +
-#   theme_minimal() +
-#   theme(legend.position = "bottom",
-#         legend.key.height = unit(1/8, "in"),
-#         axis.line = element_line(linewidth = .5, color = "black"),
-#         panel.grid.major.x = element_blank(),
-#         panel.grid.minor.x = element_blank(),
-#         panel.grid.major.y = element_line(linewidth = .125, color = "dark gray"),
-#         panel.grid.minor.y = element_line(linewidth = .125, linetype = 2, color = "dark gray")
-#         # panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
-#         # panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray")
-#         ) + 
-#   scale_y_continuous(breaks = seq(0, .2, .01),
-#                      labels = scales::percent_format(accuracy = 1),
-#                      limits = c(0, ceiling(max(pop_dist_group$Percentage) * 100) /100),
-#                      expand = c(0,0))
+  print_paged_df(pop_dist_group)
+  
+  pop_distro_plot <- ggplot(pop_dist_group, aes(x = Age_Bracket, y = Percentage)) +
+    # geom_bar(stat = "identity", position = "dodge2") + 
+    geom_col(aes(fill = Group), position = "dodge") + 
+    labs(title = paste("Population distribution in", city, "and benchmark cities"),
+         y = "Percentage", x = "Age Bracket", fill = "") +
+    theme_minimal() +
+    theme(legend.position = "bottom",
+          legend.key.height = unit(1/8, "in"),
+          axis.line = element_line(linewidth = .5, color = "black"),
+          panel.grid.major.x = element_blank(),
+          panel.grid.minor.x = element_blank(),
+          panel.grid.major.y = element_line(linewidth = .125, color = "dark gray"),
+          panel.grid.minor.y = element_line(linewidth = .125, linetype = 2, color = "dark gray")
+          # panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
+          # panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray")
+    ) + 
+    scale_y_continuous(breaks = seq(0, .2, .01),
+                       labels = scales::percent_format(accuracy = 1),
+                       limits = c(0, ceiling(max(pop_dist_group$Percentage) * 100) /100),
+                       expand = c(0,0)) +
+    scale_fill_manual(values = hues)
+  # limits = c(0,.1))
+  ggsave("plots/oxford-pop-distro.png", plot = pop_distro_plot, device = "png",
+         width = 8, height = 6.5, units = "in", dpi = "print")
+  
+  # Print population distribution plot (OUTPUT)
+  ggplot2:::print.ggplot(pop_distro_plot)
+  
+  # # Plotting histogram of focus city and lines for all other cities
+  # # Probably better to use just one line for the median city
+  # pop_dist_long %>%
+  #   ggplot(aes(x = Age_Bracket, y = Percentage, group = Location)) +
+  #   # geom_col(aes(fill = Location), position = "dodge")
+  #   geom_col(data = pop_dist_long %>% filter(Location == city)) +
+  #   geom_line(color = "dark grey") +
+  #  labs(title = paste("Population distribution in", city, "and benchmark cities"),
+  #        y = "Percentage", x = "Age Bracket", fill = "") +
+  #   theme_minimal() +
+  #   theme(legend.position = "bottom",
+  #         legend.key.height = unit(1/8, "in"),
+  #         axis.line = element_line(linewidth = .5, color = "black"),
+  #         panel.grid.major.x = element_blank(),
+  #         panel.grid.minor.x = element_blank(),
+  #         panel.grid.major.y = element_line(linewidth = .125, color = "dark gray"),
+  #         panel.grid.minor.y = element_line(linewidth = .125, linetype = 2, color = "dark gray")
+  #         # panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
+  #         # panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray")
+  #         ) + 
+  #   scale_y_continuous(breaks = seq(0, .2, .01),
+  #                      labels = scales::percent_format(accuracy = 1),
+  #                      limits = c(0, ceiling(max(pop_dist_group$Percentage) * 100) /100),
+  #                      expand = c(0,0))
 }
 ```
 
@@ -558,79 +558,79 @@ Reproductive age is percentage of female population that is of reproductive age
 # WorldPop Age Groups
 age_file <- list.files()[!is.na(str_match(list.files(), ".*age_distribution.csv"))]
 if (length(age_file) == 0) warning("No WorldPop age distribution file") else {
-pop_dist_group_wp <- read_csv(age_file, col_types = "fdd") %>% 
-  rename(Age_Bracket = age_group, Female = female, Male = male) %>%
-  pivot_longer(cols = c("Female", "Male"), names_to = "Sex", values_to = "Count") %>% 
-  mutate(Age_Bracket = forcats::fct_collapse(Age_Bracket, "0-4" = c("<1", "1-4"))) %>%
-  group_by(Age_Bracket, Sex) %>% summarize(Count = sum(Count), .groups = "drop") %>%
-  # mutate(Age_Bracket = factor(Age_Bracket, levels = unique(Age_Bracket))) %>%
-  mutate(Percentage = Count/sum(Count)) %>%
-  group_by(Sex) %>%
-  mutate(
-    Sexed_Percent = Count/sum(Count),
-    Sexed_Percent_cum = cumsum(Sexed_Percent)) %>% 
-  ungroup()
-
+  pop_dist_group_wp <- read_csv(age_file, col_types = "fdd") %>% 
+    rename(Age_Bracket = age_group, Female = female, Male = male) %>%
+    pivot_longer(cols = c("Female", "Male"), names_to = "Sex", values_to = "Count") %>% 
+    mutate(Age_Bracket = forcats::fct_collapse(Age_Bracket, "0-4" = c("<1", "1-4"))) %>%
+    group_by(Age_Bracket, Sex) %>% summarize(Count = sum(Count), .groups = "drop") %>%
+    # mutate(Age_Bracket = factor(Age_Bracket, levels = unique(Age_Bracket))) %>%
+    mutate(Percentage = Count/sum(Count)) %>%
+    group_by(Sex) %>%
+    mutate(
+      Sexed_Percent = Count/sum(Count),
+      Sexed_Percent_cum = cumsum(Sexed_Percent)) %>% 
+    ungroup()
+  
   # Print WorldPop age-sex distribution table (OUTPUT)
-print_paged_df(pop_dist_group_wp)
-
-pop_age_sex_plot <- ggplot(pop_dist_group_wp, aes(x = Age_Bracket, y = Percentage, fill = Sex)) +
-  # geom_bar(stat = "identity", position = "dodge2") + 
-  geom_col(position = "dodge") + 
-  labs(title = paste("Population distribution in", city, "by sex"),
-       y = "Percentage", x = "Age Bracket", fill = "") +
-  theme_minimal() +
-  theme(legend.position = "none",
-        legend.key.height = unit(1/8, "in"),
-        axis.line = element_line(linewidth = .5, color = "black"),
-        panel.grid.major.x = element_blank(),
-        panel.grid.minor.x = element_blank(),
-        panel.grid.major.y = element_line(linewidth = .125, color = "dark gray"),
-        panel.grid.minor.y = element_line(linewidth = .125, linetype = 2, color = "dark gray")
-        # panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
-        # panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray")
-        ) + 
-  scale_y_continuous(breaks = seq(0, .2, .01),
-                     labels = scales::percent_format(accuracy = 1),
-                     limits = c(0, ceiling(max(pop_dist_group_wp$Percentage) * 100) /100),
-                     expand = c(0,0)) #+
+  print_paged_df(pop_dist_group_wp)
+  
+  pop_age_sex_plot <- ggplot(pop_dist_group_wp, aes(x = Age_Bracket, y = Percentage, fill = Sex)) +
+    # geom_bar(stat = "identity", position = "dodge2") + 
+    geom_col(position = "dodge") + 
+    labs(title = paste("Population distribution in", city, "by sex"),
+         y = "Percentage", x = "Age Bracket", fill = "") +
+    theme_minimal() +
+    theme(legend.position = "none",
+          legend.key.height = unit(1/8, "in"),
+          axis.line = element_line(linewidth = .5, color = "black"),
+          panel.grid.major.x = element_blank(),
+          panel.grid.minor.x = element_blank(),
+          panel.grid.major.y = element_line(linewidth = .125, color = "dark gray"),
+          panel.grid.minor.y = element_line(linewidth = .125, linetype = 2, color = "dark gray")
+          # panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
+          # panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray")
+    ) + 
+    scale_y_continuous(breaks = seq(0, .2, .01),
+                       labels = scales::percent_format(accuracy = 1),
+                       limits = c(0, ceiling(max(pop_dist_group_wp$Percentage) * 100) /100),
+                       expand = c(0,0)) #+
   # scale_fill_manual(values = hues)
-
-    # Print WorldPop age-sex distribution plot (OUTPUT)
-ggplot2:::print.ggplot(pop_age_sex_plot)
-ggsave("plots/world-pop-age-sex.png", plot = pop_age_sex_plot, device = "png",
-       width = 8, height = 6.84, units = "in", dpi = "print")
-
-under5 <- pop_dist_group_wp %>% 
-  filter(Age_Bracket %in% c("0-4")) %>% summarize(across(c(Count, Percentage), sum))
-youth <- pop_dist_group_wp %>% 
-  filter(Age_Bracket %in% c("15-19", "20-24")) %>% summarize(across(c(Count, Percentage), sum))
-working_age <- pop_dist_group_wp %>% 
-  filter(Age_Bracket %in% c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-54", "55-59", "60-64")) %>% summarize(across(c(Count, Percentage), sum))
-elderly <- pop_dist_group_wp %>% 
-  filter(Age_Bracket %in% c("60-64", "65-69", "70-74", "75-79", "80+")) %>% summarize(across(c(Count, Percentage), sum))
-sex_totals <-  pop_dist_group_wp %>% 
-  group_by(Sex) %>% summarize(across(c(Count, Percentage), sum))
-female_pct <- sex_totals[which(sex_totals$Sex == "Female"), 3]
-sex_ratio <- (1 - female_pct) / female_pct * 100
-reproductive_age <-  pop_dist_group_wp %>% 
-  filter(Sex == "Female", Age_Bracket %in% c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49")) %>% summarize(across(c(Count, Sexed_Percent), sum))
-
-if (!in_oxford) {
-  # Print age distribution if not in Oxford (OUTPUT)
-  pop_dist_group_wp %>% group_by(Age_Bracket) %>% 
-    summarize(Percentage = sum(Percentage)) %>%
-    mutate(cumpct = cumsum(Percentage)) %>%
-    print_paged_df()
-}
-
-# Print demographic stats (OUTPUT)
-print_text(paste("under5:", under5$Percentage %>% {scales::label_percent()(.)}))
-print_text(paste("youth (15-24):", youth$Percentage %>% {scales::label_percent()(.)}))
-print_text(paste("working_age (15-64):", working_age$Percentage %>% {scales::label_percent()(.)}))
-print_text(paste("elderly (60+):", elderly$Percentage %>% {scales::label_percent()(.)}))
-print_text(paste("reproductive_age, percent of women (15-50):", reproductive_age$Sexed_Percent %>% {scales::label_percent()(.)}))
-print_text(paste("sex_ratio:", round(sex_ratio, 2), "males to 100 females"))
+  
+  # Print WorldPop age-sex distribution plot (OUTPUT)
+  ggplot2:::print.ggplot(pop_age_sex_plot)
+  ggsave("plots/world-pop-age-sex.png", plot = pop_age_sex_plot, device = "png",
+         width = 8, height = 6.84, units = "in", dpi = "print")
+  
+  under5 <- pop_dist_group_wp %>% 
+    filter(Age_Bracket %in% c("0-4")) %>% summarize(across(c(Count, Percentage), sum))
+  youth <- pop_dist_group_wp %>% 
+    filter(Age_Bracket %in% c("15-19", "20-24")) %>% summarize(across(c(Count, Percentage), sum))
+  working_age <- pop_dist_group_wp %>% 
+    filter(Age_Bracket %in% c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-54", "55-59", "60-64")) %>% summarize(across(c(Count, Percentage), sum))
+  elderly <- pop_dist_group_wp %>% 
+    filter(Age_Bracket %in% c("60-64", "65-69", "70-74", "75-79", "80+")) %>% summarize(across(c(Count, Percentage), sum))
+  sex_totals <-  pop_dist_group_wp %>% 
+    group_by(Sex) %>% summarize(across(c(Count, Percentage), sum))
+  female_pct <- sex_totals[which(sex_totals$Sex == "Female"), 3]
+  sex_ratio <- (1 - female_pct) / female_pct * 100
+  reproductive_age <-  pop_dist_group_wp %>% 
+    filter(Sex == "Female", Age_Bracket %in% c("15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49")) %>% summarize(across(c(Count, Sexed_Percent), sum))
+  
+  if (!in_oxford) {
+    # Print age distribution if not in Oxford (OUTPUT)
+    pop_dist_group_wp %>% group_by(Age_Bracket) %>% 
+      summarize(Percentage = sum(Percentage)) %>%
+      mutate(cumpct = cumsum(Percentage)) %>%
+      print_paged_df()
+  }
+  
+  # Print demographic stats (OUTPUT)
+  print_text(paste("under5:", under5$Percentage %>% {scales::label_percent()(.)}))
+  print_text(paste("youth (15-24):", youth$Percentage %>% {scales::label_percent()(.)}))
+  print_text(paste("working_age (15-64):", working_age$Percentage %>% {scales::label_percent()(.)}))
+  print_text(paste("elderly (60+):", elderly$Percentage %>% {scales::label_percent()(.)}))
+  print_text(paste("reproductive_age, percent of women (15-50):", reproductive_age$Sexed_Percent %>% {scales::label_percent()(.)}))
+  print_text(paste("sex_ratio:", round(sex_ratio, 2), "males to 100 females"))
 }
 ```
 
@@ -640,33 +640,33 @@ Back to Oxford Economics
 
 ```{r, echo = F, results = results_type}
 if (in_oxford) {
-# Using age groups 0-14, 15-64, 65+
-# https://databank.worldbank.org/metadataglossary/world-development-indicators/series/SP.POP.DPND.YG
-pop_dist_structure <- oxford %>%
-  subset(Location == city & Indicator %in% pop_dist_inds) %>%
-  select(Location, Indicator, starts_with('20'), Group) %>%
-  mutate(Age_Bracket = substr(Indicator, 12, 20),
-         Age_Bracket = factor(Age_Bracket, levels = unique(Age_Bracket))) %>%
-  pivot_longer(cols = starts_with("20"), names_to = "Year", values_to = "Count") %>%
-  mutate(Year = as.numeric(Year)) %>%
-  subset(Year < 2022) %>%
-  mutate(Group = case_when(
-    Age_Bracket %in% c("0-4", "5-9","10-14") ~ "Young",
-    Age_Bracket %in% c("65-69", "70-74","75-79", "80+") ~ "65+",
-    T ~ "Working"),
-    Group = factor(Group, levels = c("Young", "Working", "65+"))) %>%
-  group_by(Year, Group) %>%
-  summarize(Count = sum(Count), .groups = "drop") %>%
-  group_by(Year) %>%
-  mutate(Percent = Count / sum(Count), pct_sum = cumsum(Percent)) 
-
-# Print age structure (young, working, elderly) (OUTPUT)
-print_paged_df(pop_dist_structure)
-hues_age_structure <- c("black", "dark grey", "dark grey") %>% #c(scales::hue_pal()(2)) %>% 
-  setNames(c("Working", "Young", "65+"))
-hues_age_structure[1] <- "#000000"
-
-pop_dist_plot <- ggplot(pop_dist_structure) +
+  # Using age groups 0-14, 15-64, 65+
+  # https://databank.worldbank.org/metadataglossary/world-development-indicators/series/SP.POP.DPND.YG
+  pop_dist_structure <- oxford %>%
+    subset(Location == city & Indicator %in% pop_dist_inds) %>%
+    select(Location, Indicator, starts_with('20'), Group) %>%
+    mutate(Age_Bracket = substr(Indicator, 12, 20),
+           Age_Bracket = factor(Age_Bracket, levels = unique(Age_Bracket))) %>%
+    pivot_longer(cols = starts_with("20"), names_to = "Year", values_to = "Count") %>%
+    mutate(Year = as.numeric(Year)) %>%
+    subset(Year < 2022) %>%
+    mutate(Group = case_when(
+      Age_Bracket %in% c("0-4", "5-9","10-14") ~ "Young",
+      Age_Bracket %in% c("65-69", "70-74","75-79", "80+") ~ "65+",
+      T ~ "Working"),
+      Group = factor(Group, levels = c("Young", "Working", "65+"))) %>%
+    group_by(Year, Group) %>%
+    summarize(Count = sum(Count), .groups = "drop") %>%
+    group_by(Year) %>%
+    mutate(Percent = Count / sum(Count), pct_sum = cumsum(Percent)) 
+  
+  # Print age structure (young, working, elderly) (OUTPUT)
+  print_paged_df(pop_dist_structure)
+  hues_age_structure <- c("black", "dark grey", "dark grey") %>% #c(scales::hue_pal()(2)) %>% 
+    setNames(c("Working", "Young", "65+"))
+  hues_age_structure[1] <- "#000000"
+  
+  pop_dist_plot <- ggplot(pop_dist_structure) +
     geom_area(aes(x = Year, y = Percent, fill = forcats::fct_rev(Group)), alpha = 0.8) +
     geom_text_repel(
       data = subset(pop_dist_structure, Year == 2021),
@@ -678,22 +678,22 @@ pop_dist_plot <- ggplot(pop_dist_structure) +
       minor_breaks = 2000:2025,
       breaks = c(2000, 2005, 2010, 2015, 2020),
       limits = c(2000, 2025), expand = c(0,0)) +
-  scale_fill_manual(values = hues_age_structure) +
-  scale_color_manual(values = hues_age_structure) +
-  theme_minimal() +
+    scale_fill_manual(values = hues_age_structure) +
+    scale_color_manual(values = hues_age_structure) +
+    theme_minimal() +
     theme(axis.line = element_line(linewidth = .5, color = "black"),
           legend.position = "none") +
     labs(title = "Age Structure, 2000-2021",
          y = "Percent of Population",
          x = "Year")
-ggsave("plots/oxford-age-structure-area.png", plot = pop_dist_plot, device = "png",
+  ggsave("plots/oxford-age-structure-area.png", plot = pop_dist_plot, device = "png",
          width = 4, height = 3.5, units = "in", dpi = "print")
-
-# Print plot of age structure (OUTPUT)
-ggplot2:::print.ggplot(pop_dist_plot)
+  
+  # Print plot of age structure (OUTPUT)
+  ggplot2:::print.ggplot(pop_dist_plot)
 }
 ```
-  
+
 ### Share of GDP, Emp, Pop
 ```{r, echo = F, results = results_type}
 if (in_oxford) {
@@ -822,298 +822,298 @@ if (in_oxford) {
 
 ```{r, echo = F, results = results_type}
 if (in_oxford) {
-pop_longitude <- oxford %>% subset(Indicator %in% extra_inds) %>%
-  select(Group, Location, Country, Indicator, matches('\\d')) %>%
-  pivot_longer(cols = matches('^\\d'), names_to = "Year", values_to = "Value") %>%
-  pivot_wider(values_from = Value, names_from = Indicator) %>%
-  mutate(
-    Year = as.numeric(Year),
-    Population = `Total population` * 1000) %>%
-  arrange(Group) %>% 
-  subset(Year <= 2021 & !is.na(Population))
-
-print_text("Total pop in 2021")
-pop_longitude %>% slice_max(Year) %>% arrange(-Population) %>% select(Group, Location, Population) %>%
-print_paged_df()
-
-multi_city_pop_plot <- ggplot(pop_longitude) +
-  geom_line(aes(x = Year, y = `Population`, group = Location, color = Group)) +
-  scale_color_manual(values = hues) +
-  theme_minimal() +
-  theme(panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
-        panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray"),
-        axis.line = element_line(linewidth = .5, color = "black"),
-        legend.position = "none") +
-  labs(title = paste("Population of", city, "and benchmark cities"), x = "") +
-  scale_y_continuous(labels = scales::label_comma(), expand = c(0,0)) +
-  scale_x_continuous(breaks = seq(min(pop_longitude$Year), 2021, 5), minor_breaks = seq(2000,2030,1), limits = c(min(pop_longitude$Year), 2028), expand = c(0,0)) +
-  # geom_dl(aes(label = Location), method = list(dl.combine("first.points", "last.points")), cex = 0.8) 
-  geom_text_repel(data = pop_longitude %>% subset(Year == 2021), aes(label = Location, x = 2021, y = `Population`, color = Group), 
-                  hjust = 0, size = 3, xlim = c(2021.25, 2030), box.padding = 0.05, direction = "y")
-ggsave("plots/oxford-pop_line.png", device = "png",
-       width = 5, height = 4.6, units = "in", dpi = "print")
-# print_paged_df(pop_longitude)
-ggplot2:::print.ggplot(multi_city_pop_plot)
+  pop_longitude <- oxford %>% subset(Indicator %in% extra_inds) %>%
+    select(Group, Location, Country, Indicator, matches('\\d')) %>%
+    pivot_longer(cols = matches('^\\d'), names_to = "Year", values_to = "Value") %>%
+    pivot_wider(values_from = Value, names_from = Indicator) %>%
+    mutate(
+      Year = as.numeric(Year),
+      Population = `Total population` * 1000) %>%
+    arrange(Group) %>% 
+    subset(Year <= 2021 & !is.na(Population))
+  
+  print_text("Total pop in 2021")
+  pop_longitude %>% slice_max(Year) %>% arrange(-Population) %>% select(Group, Location, Population) %>%
+    print_paged_df()
+  
+  multi_city_pop_plot <- ggplot(pop_longitude) +
+    geom_line(aes(x = Year, y = `Population`, group = Location, color = Group)) +
+    scale_color_manual(values = hues) +
+    theme_minimal() +
+    theme(panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
+          panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray"),
+          axis.line = element_line(linewidth = .5, color = "black"),
+          legend.position = "none") +
+    labs(title = paste("Population of", city, "and benchmark cities"), x = "") +
+    scale_y_continuous(labels = scales::label_comma(), expand = c(0,0)) +
+    scale_x_continuous(breaks = seq(min(pop_longitude$Year), 2021, 5), minor_breaks = seq(2000,2030,1), limits = c(min(pop_longitude$Year), 2028), expand = c(0,0)) +
+    # geom_dl(aes(label = Location), method = list(dl.combine("first.points", "last.points")), cex = 0.8) 
+    geom_text_repel(data = pop_longitude %>% subset(Year == 2021), aes(label = Location, x = 2021, y = `Population`, color = Group), 
+                    hjust = 0, size = 3, xlim = c(2021.25, 2030), box.padding = 0.05, direction = "y")
+  ggsave("plots/oxford-pop_line.png", device = "png",
+         width = 5, height = 4.6, units = "in", dpi = "print")
+  # print_paged_df(pop_longitude)
+  ggplot2:::print.ggplot(multi_city_pop_plot)
 }
 ```
 
 
 ```{r, echo = F, results = results_type}
 if (in_oxford) {
-# city_emp_growth <- subset(emp_growth, Location == city, select = `Employment Growth`) %>% pull()
-# ggplot(emp_growth) +
-#   geom_boxplot(aes(y = `Employment Growth`), fill = "#00BFC5") +
-#   theme_minimal() +
-#   theme(axis.title.x = element_blank(),
-#         axis.text.x = element_blank(),
-#         axis.ticks.x = element_blank()) +
-#   labs(title = paste("Employment Growth of", city, "and benchmark cities"), x = "") +
-#   geom_label(data = data.frame(x = 0, y = city_emp_growth, name = city),
-#              aes(x = x, y = y, label = name), label.size = NA) +
-#   scale_y_continuous(breaks = seq(0, .2, .01),
-#                      minor_breaks = seq(0, .2, .005),
-#                      labels = scales::percent_format(accuracy = 1))
-# ggsave("plots/oxford-emp-growth-box.png", device = "png",
-#        width = 8, height = 5, units = "in", dpi = "print")
-
-emp_longitude <- oxford %>% subset(Indicator %in% extra_inds) %>%
-  select(Group, Location, Country, Indicator, matches('\\d')) %>%
-  pivot_longer(cols = matches('^\\d'), names_to = "Year", values_to = "Value") %>%
-  pivot_wider(values_from = Value, names_from = Indicator) %>%
-  mutate(
-    Year = as.numeric(Year),
-    `Total employed` = `Employment - Total` * 1000) %>%
-  arrange(Group) %>% 
-  subset(Year <= 2021 & !is.na(`Total employed`))
-
-print_text("Total employed in 2021")
-emp_longitude %>% slice_max(Year) %>% arrange(-`Total employed`) %>% select(Group, Location, `Total employed`) %>%
-print_paged_df()
-
-multi_city_emp_plot <- ggplot(emp_longitude) +
-  geom_line(aes(x = Year, y = `Total employed`, group = Location, color = Group)) +
-  scale_color_manual(values = hues) +
-  theme_minimal() +
-  theme(panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
-        panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray"),
-      axis.line = element_line(linewidth = .5, color = "black"),
-        legend.position = "none") +
-  labs(title = paste("Employment of", city, "and benchmark cities"), x = "") +
-  scale_y_continuous(labels = scales::label_comma(), expand = c(0,0)) +
-  scale_x_continuous(breaks = seq(min(emp_longitude$Year), 2021, 5), minor_breaks = seq(2000,2030,1), limits = c(min(emp_longitude$Year), 2028), expand = c(0,0)) +
-  # geom_dl(aes(label = Location), method = list(dl.combine("first.points", "last.points")), cex = 0.8) 
-  geom_text_repel(data = subset(emp_longitude, Year == 2021), aes(label = Location, x = 2021, y = `Total employed`, color = Group), 
-                  hjust = 0, size = 3, xlim = c(2021.25, 2030), box.padding = 0.05, direction = "y")
-ggsave("plots/oxford-emp_line.png", device = "png", plot = multi_city_emp_plot,
-       width = 5, height = 4.6, units = "in", dpi = "print")
-ggplot2:::print.ggplot(multi_city_emp_plot)
-
-# city_gdp_growth <- subset(gdp_growth, Location == city, select = `GDP Growth`) %>% pull()
-# ggplot(gdp_growth) +
-#   geom_boxplot(aes(y = `GDP Growth`), fill = "#00BFC5") +
-#   theme_minimal() +
-#   theme(axis.title.x = element_blank(),
-#         axis.text.x = element_blank(),
-#         axis.ticks.x = element_blank()) +
-#   labs(title = paste("GDP Growth of", city, "and benchmark cities"), x = "") +
-#   geom_label(data = data.frame(x = 0, y = city_gdp_growth, name = city),
-#              aes(x = x, y = y, label = name), label.size = NA) +
-#   scale_y_continuous(breaks = seq(0, .2, .01),
-#                      minor_breaks = seq(0, .2, .005),
-#                      labels = scales::percent_format(accuracy = 1))
-# ggsave("plots/oxford-gdp-growth-box.png", device = "png",
-#        width = 8, height = 5, units = "in", dpi = "print")
-
-# pop_growth2 %>% arrange(Group) %>% View()
-# emp_growth %>% arrange(Group) %>% View()
-# gdp_growth %>% arrange(Group) %>% View()
+  # city_emp_growth <- subset(emp_growth, Location == city, select = `Employment Growth`) %>% pull()
+  # ggplot(emp_growth) +
+  #   geom_boxplot(aes(y = `Employment Growth`), fill = "#00BFC5") +
+  #   theme_minimal() +
+  #   theme(axis.title.x = element_blank(),
+  #         axis.text.x = element_blank(),
+  #         axis.ticks.x = element_blank()) +
+  #   labs(title = paste("Employment Growth of", city, "and benchmark cities"), x = "") +
+  #   geom_label(data = data.frame(x = 0, y = city_emp_growth, name = city),
+  #              aes(x = x, y = y, label = name), label.size = NA) +
+  #   scale_y_continuous(breaks = seq(0, .2, .01),
+  #                      minor_breaks = seq(0, .2, .005),
+  #                      labels = scales::percent_format(accuracy = 1))
+  # ggsave("plots/oxford-emp-growth-box.png", device = "png",
+  #        width = 8, height = 5, units = "in", dpi = "print")
+  
+  emp_longitude <- oxford %>% subset(Indicator %in% extra_inds) %>%
+    select(Group, Location, Country, Indicator, matches('\\d')) %>%
+    pivot_longer(cols = matches('^\\d'), names_to = "Year", values_to = "Value") %>%
+    pivot_wider(values_from = Value, names_from = Indicator) %>%
+    mutate(
+      Year = as.numeric(Year),
+      `Total employed` = `Employment - Total` * 1000) %>%
+    arrange(Group) %>% 
+    subset(Year <= 2021 & !is.na(`Total employed`))
+  
+  print_text("Total employed in 2021")
+  emp_longitude %>% slice_max(Year) %>% arrange(-`Total employed`) %>% select(Group, Location, `Total employed`) %>%
+    print_paged_df()
+  
+  multi_city_emp_plot <- ggplot(emp_longitude) +
+    geom_line(aes(x = Year, y = `Total employed`, group = Location, color = Group)) +
+    scale_color_manual(values = hues) +
+    theme_minimal() +
+    theme(panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
+          panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray"),
+          axis.line = element_line(linewidth = .5, color = "black"),
+          legend.position = "none") +
+    labs(title = paste("Employment of", city, "and benchmark cities"), x = "") +
+    scale_y_continuous(labels = scales::label_comma(), expand = c(0,0)) +
+    scale_x_continuous(breaks = seq(min(emp_longitude$Year), 2021, 5), minor_breaks = seq(2000,2030,1), limits = c(min(emp_longitude$Year), 2028), expand = c(0,0)) +
+    # geom_dl(aes(label = Location), method = list(dl.combine("first.points", "last.points")), cex = 0.8) 
+    geom_text_repel(data = subset(emp_longitude, Year == 2021), aes(label = Location, x = 2021, y = `Total employed`, color = Group), 
+                    hjust = 0, size = 3, xlim = c(2021.25, 2030), box.padding = 0.05, direction = "y")
+  ggsave("plots/oxford-emp_line.png", device = "png", plot = multi_city_emp_plot,
+         width = 5, height = 4.6, units = "in", dpi = "print")
+  ggplot2:::print.ggplot(multi_city_emp_plot)
+  
+  # city_gdp_growth <- subset(gdp_growth, Location == city, select = `GDP Growth`) %>% pull()
+  # ggplot(gdp_growth) +
+  #   geom_boxplot(aes(y = `GDP Growth`), fill = "#00BFC5") +
+  #   theme_minimal() +
+  #   theme(axis.title.x = element_blank(),
+  #         axis.text.x = element_blank(),
+  #         axis.ticks.x = element_blank()) +
+  #   labs(title = paste("GDP Growth of", city, "and benchmark cities"), x = "") +
+  #   geom_label(data = data.frame(x = 0, y = city_gdp_growth, name = city),
+  #              aes(x = x, y = y, label = name), label.size = NA) +
+  #   scale_y_continuous(breaks = seq(0, .2, .01),
+  #                      minor_breaks = seq(0, .2, .005),
+  #                      labels = scales::percent_format(accuracy = 1))
+  # ggsave("plots/oxford-gdp-growth-box.png", device = "png",
+  #        width = 8, height = 5, units = "in", dpi = "print")
+  
+  # pop_growth2 %>% arrange(Group) %>% View()
+  # emp_growth %>% arrange(Group) %>% View()
+  # gdp_growth %>% arrange(Group) %>% View()
 }
 ```
 
 ```{r, echo = F, results = results_type}
 if (in_oxford) {
-gdp_longitude <- oxford %>% subset(Indicator %in% extra_inds) %>%
-  select(Group, Location, Country, Indicator, matches('\\d')) %>%
-  pivot_longer(cols = matches('^\\d'), names_to = "Year", values_to = "Value") %>%
-  pivot_wider(values_from = Value, names_from = Indicator) %>%
-  mutate(
-    Year = as.numeric(Year),
-    GDP = `GDP, real, US$ - Total` * 1e6) %>%
-  arrange(Group) %>% 
-  subset(Year <= 2021 & !is.na(`GDP`))
-
-print_text("Total GDP in 2021")
-gdp_longitude %>% slice_max(Year) %>% arrange(-GDP) %>% select(Group, Location, GDP) %>%
-  print_paged_df()
-
-multi_city_gdp_plot <- ggplot(gdp_longitude) +
-  geom_line(aes(x = Year, y = `GDP`, group = Location, color = Group)) +
-  scale_color_manual(values = hues) +
-  theme_minimal() +
-  theme(panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
-        panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray"),
-      axis.line = element_line(linewidth = .5, color = "black"),
-        legend.position = "none") +
-  labs(title = paste("GDP of", city, "and benchmark cities"), x = "") +
-  scale_y_continuous(labels = scales::label_dollar(), expand = c(0,0)) +
-  scale_x_continuous(
-    breaks = seq(min(gdp_longitude$Year), 2021, 5),
-    minor_breaks = seq(2000,2030,1),
-    limits = c(min(gdp_longitude$Year), 2028), expand = c(0,0)) +
-  # geom_dl(aes(label = Location), method = list(dl.combine("first.points", "last.points")), cex = 0.8) 
-  geom_text_repel(data = subset(gdp_longitude, Year == 2021), aes(label = Location, x = 2022, y = `GDP`, color = Group), 
-                  hjust = 0, size = 3, xlim = c(2021.25, 2030), box.padding = 0.05)
-ggsave("plots/oxford-gdp_line.png", device = "png",
-       width = 5, height = 4.6, units = "in", dpi = "print")
-ggplot2:::print.ggplot(multi_city_gdp_plot)
+  gdp_longitude <- oxford %>% subset(Indicator %in% extra_inds) %>%
+    select(Group, Location, Country, Indicator, matches('\\d')) %>%
+    pivot_longer(cols = matches('^\\d'), names_to = "Year", values_to = "Value") %>%
+    pivot_wider(values_from = Value, names_from = Indicator) %>%
+    mutate(
+      Year = as.numeric(Year),
+      GDP = `GDP, real, US$ - Total` * 1e6) %>%
+    arrange(Group) %>% 
+    subset(Year <= 2021 & !is.na(`GDP`))
+  
+  print_text("Total GDP in 2021")
+  gdp_longitude %>% slice_max(Year) %>% arrange(-GDP) %>% select(Group, Location, GDP) %>%
+    print_paged_df()
+  
+  multi_city_gdp_plot <- ggplot(gdp_longitude) +
+    geom_line(aes(x = Year, y = `GDP`, group = Location, color = Group)) +
+    scale_color_manual(values = hues) +
+    theme_minimal() +
+    theme(panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
+          panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray"),
+          axis.line = element_line(linewidth = .5, color = "black"),
+          legend.position = "none") +
+    labs(title = paste("GDP of", city, "and benchmark cities"), x = "") +
+    scale_y_continuous(labels = scales::label_dollar(), expand = c(0,0)) +
+    scale_x_continuous(
+      breaks = seq(min(gdp_longitude$Year), 2021, 5),
+      minor_breaks = seq(2000,2030,1),
+      limits = c(min(gdp_longitude$Year), 2028), expand = c(0,0)) +
+    # geom_dl(aes(label = Location), method = list(dl.combine("first.points", "last.points")), cex = 0.8) 
+    geom_text_repel(data = subset(gdp_longitude, Year == 2021), aes(label = Location, x = 2022, y = `GDP`, color = Group), 
+                    hjust = 0, size = 3, xlim = c(2021.25, 2030), box.padding = 0.05)
+  ggsave("plots/oxford-gdp_line.png", device = "png",
+         width = 5, height = 4.6, units = "in", dpi = "print")
+  ggplot2:::print.ggplot(multi_city_gdp_plot)
 }
 ```
 
 ### GDP per capita
 ```{r, echo = F, results = results_type}
 if (in_oxford) {
-gdppc <- oxford %>% subset(Indicator %in% extra_inds) %>%
-  select(Group, Location, Country, Indicator, Value = `2021`) %>%
-  pivot_wider(values_from = Value, names_from = Indicator) %>%
-  mutate(`GDP per capita` = `GDP, real, US$ - Total` * 1e6  / (`Total population` * 1000)) %>%
-  arrange(Group, -`GDP per capita`)
-
-gdppc_plot <- ggplot(gdppc) +
-  geom_col(aes(y = fct_reorder(Location, -`GDP per capita`), x = `GDP per capita`, fill = Group)) +
-  theme_minimal() +
-  theme(panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
-        panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray"),
-      axis.line = element_line(linewidth = .5, color = "black"),
-        legend.position = "none") +
-  labs(title = paste("GDP per capita in", city, "and benchmark cities"),
-       y = "City") + 
-  scale_x_continuous(labels = scales::dollar_format(), expand = expansion(mult = c(0,0.05)))
-ggsave("plots/oxford-gdp-per-capita.png", plot = gdppc_plot, device = "png",
-       width = 8, height = 5, units = "in", dpi = "print")
-ggplot2:::print.ggplot(gdppc_plot)
-print_paged_df(subset(gdppc, Location == city))
-
-gdppc_longitude <- oxford %>% subset(Indicator %in% extra_inds) %>%
-  select(Group, Location, Country, Indicator, matches('\\d')) %>%
-  pivot_longer(cols = matches('^\\d'), names_to = "Year", values_to = "Value") %>%
-  pivot_wider(values_from = Value, names_from = Indicator) %>%
-  group_by(Location) %>%
-  mutate(
-    Year = as.numeric(Year),
-    `GDP per capita` = `GDP, real, US$ - Total` * 1e6  / (`Total population` * 1000),
-    growth = `GDP per capita` - lag(`GDP per capita`),
-    growth_pct = growth/lag(`GDP per capita`)) %>%
-  arrange(Group) %>% 
-  subset(Year <= 2021 & !is.na(`GDP per capita`))
-
-# gdppc_longitude %>% group_by(Location) %>% summarize(growth = (tail(`GDP per capita`, 1) - head(`GDP per capita`, 1))/(tail(Year) - head(Year, 1)) )
-
-gdppc_longitude %>%
-  slice_max(Year, n = 10) %>%
-  summarize(`growth_pct` = mean(growth_pct), .groups = "drop") %>%
-  arrange(desc(`growth_pct`)) %>% print_paged_df()
-
-gdppc_longitude_plot <- ggplot(gdppc_longitude) +
-  geom_line(aes(x = Year, y = `GDP per capita`, group = Location, color = Group)) +
-  scale_color_manual(values = hues) +
-  theme_minimal() +
-  theme(panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
-        panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray"),
-      axis.line = element_line(linewidth = .5, color = "black"),
-        legend.position = "none") +
-  labs(title = paste("GDP per capita of", city, "and benchmark cities"), x = "") +
-  scale_y_continuous(labels = scales::label_dollar(), expand = c(0,0)) +
-  scale_x_continuous(breaks = seq(min(gdppc_longitude$Year), 2021, 5), minor_breaks = seq(2000,2030,1), limits = c(min(gdppc_longitude$Year), 2027), expand = c(0,0)) +
-  # geom_dl(aes(label = Location), method = list(dl.combine("first.points", "last.points")), cex = 0.8) 
-  geom_text_repel(data = subset(gdppc_longitude, Year == 2021), aes(label = Location, x = 2021, y = `GDP per capita`, color = Group), 
-                  hjust = 0, size = 3, xlim = c(2021.25, 2030), box.padding = 0.05, direction = "y")
-ggsave("plots/oxford-gdp-per-capita_line.png", gdppc_longitude_plot, device = "png",
-       width = 8, height = 6.5, units = "in", dpi = "print")
-ggplot2:::print.ggplot(gdppc_longitude_plot)
+  gdppc <- oxford %>% subset(Indicator %in% extra_inds) %>%
+    select(Group, Location, Country, Indicator, Value = `2021`) %>%
+    pivot_wider(values_from = Value, names_from = Indicator) %>%
+    mutate(`GDP per capita` = `GDP, real, US$ - Total` * 1e6  / (`Total population` * 1000)) %>%
+    arrange(Group, -`GDP per capita`)
+  
+  gdppc_plot <- ggplot(gdppc) +
+    geom_col(aes(y = fct_reorder(Location, -`GDP per capita`), x = `GDP per capita`, fill = Group)) +
+    theme_minimal() +
+    theme(panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
+          panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray"),
+          axis.line = element_line(linewidth = .5, color = "black"),
+          legend.position = "none") +
+    labs(title = paste("GDP per capita in", city, "and benchmark cities"),
+         y = "City") + 
+    scale_x_continuous(labels = scales::dollar_format(), expand = expansion(mult = c(0,0.05)))
+  ggsave("plots/oxford-gdp-per-capita.png", plot = gdppc_plot, device = "png",
+         width = 8, height = 5, units = "in", dpi = "print")
+  ggplot2:::print.ggplot(gdppc_plot)
+  print_paged_df(subset(gdppc, Location == city))
+  
+  gdppc_longitude <- oxford %>% subset(Indicator %in% extra_inds) %>%
+    select(Group, Location, Country, Indicator, matches('\\d')) %>%
+    pivot_longer(cols = matches('^\\d'), names_to = "Year", values_to = "Value") %>%
+    pivot_wider(values_from = Value, names_from = Indicator) %>%
+    group_by(Location) %>%
+    mutate(
+      Year = as.numeric(Year),
+      `GDP per capita` = `GDP, real, US$ - Total` * 1e6  / (`Total population` * 1000),
+      growth = `GDP per capita` - lag(`GDP per capita`),
+      growth_pct = growth/lag(`GDP per capita`)) %>%
+    arrange(Group) %>% 
+    subset(Year <= 2021 & !is.na(`GDP per capita`))
+  
+  # gdppc_longitude %>% group_by(Location) %>% summarize(growth = (tail(`GDP per capita`, 1) - head(`GDP per capita`, 1))/(tail(Year) - head(Year, 1)) )
+  
+  gdppc_longitude %>%
+    slice_max(Year, n = 10) %>%
+    summarize(`growth_pct` = mean(growth_pct), .groups = "drop") %>%
+    arrange(desc(`growth_pct`)) %>% print_paged_df()
+  
+  gdppc_longitude_plot <- ggplot(gdppc_longitude) +
+    geom_line(aes(x = Year, y = `GDP per capita`, group = Location, color = Group)) +
+    scale_color_manual(values = hues) +
+    theme_minimal() +
+    theme(panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
+          panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray"),
+          axis.line = element_line(linewidth = .5, color = "black"),
+          legend.position = "none") +
+    labs(title = paste("GDP per capita of", city, "and benchmark cities"), x = "") +
+    scale_y_continuous(labels = scales::label_dollar(), expand = c(0,0)) +
+    scale_x_continuous(breaks = seq(min(gdppc_longitude$Year), 2021, 5), minor_breaks = seq(2000,2030,1), limits = c(min(gdppc_longitude$Year), 2027), expand = c(0,0)) +
+    # geom_dl(aes(label = Location), method = list(dl.combine("first.points", "last.points")), cex = 0.8) 
+    geom_text_repel(data = subset(gdppc_longitude, Year == 2021), aes(label = Location, x = 2021, y = `GDP per capita`, color = Group), 
+                    hjust = 0, size = 3, xlim = c(2021.25, 2030), box.padding = 0.05, direction = "y")
+  ggsave("plots/oxford-gdp-per-capita_line.png", gdppc_longitude_plot, device = "png",
+         width = 8, height = 6.5, units = "in", dpi = "print")
+  ggplot2:::print.ggplot(gdppc_longitude_plot)
 }
 ```
 
 ### Share of employment be sector
 ```{r, echo = F, results = results_type}
 if (in_oxford) {
-emp_shares <- subset(oxford, Indicator %in% emp_inds) %>%
-  subset(Indicator != "Employment - Total") %>% 
-  select(Group, Location, Indicator, Value = `2021`) %>%
-  group_by(Location, Group) %>%
-  mutate(Indicator = str_replace(Indicator, ".*- ", ""),
-         Share = Value / sum(Value)) %>%
-  mutate(Indicator = str_replace(Indicator, "Transport, storage, information & communication services", "Transport & ICT"))
-
-emp_shares2 <- emp_shares %>% 
-  ungroup() %>%
-  group_by(Group, Indicator) %>%
-  summarize(Share = median(Share), .groups = "drop") %>%
-  arrange(desc(Group), desc(Share))
-
-sector_order <- emp_shares2 %>% subset(Group == city) %>% .$Indicator %>% unique()
-sector_order <- c(sector_order[which(sector_order != "Other")], "Other")
-
-emp_shares <- emp_shares %>%
-  mutate(Indicator = factor(Indicator, levels = sector_order)) %>%
-  arrange(Indicator)
-
-emp_shares2 <- emp_shares2 %>%
-  mutate(Indicator = factor(Indicator, levels = sector_order))
-
-emp_shares2 <- emp_shares2 %>%
-  mutate(Share = case_when(Indicator == "Other" & Group == "Benchmark" ~ Share * 2 / 6, T ~ Share))
-print_text("Sectors by employment")
-print_paged_df(emp_shares2)
-
-# Gross value added, by sector ----
-# Data is with employment above
-
-gva_shares <- subset(oxford, Indicator %in% gva_inds) %>% 
-  subset(str_detect(Indicator, "Total", negate = T)) %>%
-  select(Group, Location, Indicator, Value = `2021`) %>%
-  group_by(Location, Group) %>% 
-  mutate(Indicator = str_replace(Indicator, ".*- ", "")) %>%
-  mutate(Indicator = str_replace(Indicator, "Transport, storage, information & communication services", "Transport & ICT")) %>%
-  mutate(Indicator = factor(Indicator, levels = sector_order)) %>%
-  mutate(Share = Value / sum(Value)) %>%
-  select(-Value) #%>%
-# pivot_wider(names_from = Indicator, values_from = Share) %>%
-# arrange(Group) %>% View()
-
-gva_shares2 <- gva_shares %>% 
-  ungroup() %>%
-  group_by(Group, Indicator) %>%
-  summarize(Share = median(Share), .groups = "drop") %>%
-  arrange(Group, Indicator)
-
-ylims_shares <- c(0, ceiling(max(emp_shares$Share, gva_shares$Share) * 10) /10)
-
-# emp_shares3 <- bind_rows(emp_shares, emp_shares2)
-
-emp_shares_plot <- emp_shares2 %>%
-  ggplot() +
-  geom_col(aes(x = Indicator, y = Share, fill = Group),
-           position = "dodge") +
-  # geom_text_repel(data = emp_shares, aes(x = Indicator, y = Share, label = Location), direction = "y", hjust = 0, nudge_x = 0.1, size = 2) +
-  # geom_text(data = emp_shares, aes(x = Indicator, y = Share, label = Location), hjust = 0, nudge_x = 0.1, size = 2) +
-  geom_point(data = emp_shares %>% filter(Location != city), aes(x = Indicator, y = Share, group = Group), shape = 21, color = "white", fill="dark grey",  position = position_nudge(x = .25)) +
-  # geom_point(data = emp_shares, aes(x = Indicator, y = Share)) +
-  scale_y_continuous(breaks = seq(0, 1, .05),
-                     minor_breaks = seq(0, 1, .01),
-                     limits = ylims_shares,
-                     expand = c(0,0),
-                     labels = scales::percent_format(accuracy = 1)) +
-  scale_fill_manual(values = hues) +
-  theme_minimal() +
-  theme(axis.line = element_line(linewidth = .5, color = "black"),
-        legend.position = "bottom",
-        legend.key.height = unit(1/8, "in")) +
-  labs(title = paste("Share of employment by sector in", city, "and median benchmark city"),
-       x = "Sector",
-       fill = "")
-ggplot2:::print.ggplot(emp_shares_plot)
-ggsave("plots/oxford-employment-sectors.png", plot = emp_shares_plot, device = "png",
-       width = 16, height = 5, units = "in", dpi = "print")
+  emp_shares <- subset(oxford, Indicator %in% emp_inds) %>%
+    subset(Indicator != "Employment - Total") %>% 
+    select(Group, Location, Indicator, Value = `2021`) %>%
+    group_by(Location, Group) %>%
+    mutate(Indicator = str_replace(Indicator, ".*- ", ""),
+           Share = Value / sum(Value)) %>%
+    mutate(Indicator = str_replace(Indicator, "Transport, storage, information & communication services", "Transport & ICT"))
+  
+  emp_shares2 <- emp_shares %>% 
+    ungroup() %>%
+    group_by(Group, Indicator) %>%
+    summarize(Share = median(Share), .groups = "drop") %>%
+    arrange(desc(Group), desc(Share))
+  
+  sector_order <- emp_shares2 %>% subset(Group == city) %>% .$Indicator %>% unique()
+  sector_order <- c(sector_order[which(sector_order != "Other")], "Other")
+  
+  emp_shares <- emp_shares %>%
+    mutate(Indicator = factor(Indicator, levels = sector_order)) %>%
+    arrange(Indicator)
+  
+  emp_shares2 <- emp_shares2 %>%
+    mutate(Indicator = factor(Indicator, levels = sector_order))
+  
+  emp_shares2 <- emp_shares2 %>%
+    mutate(Share = case_when(Indicator == "Other" & Group == "Benchmark" ~ Share * 2 / 6, T ~ Share))
+  print_text("Sectors by employment")
+  print_paged_df(emp_shares2)
+  
+  # Gross value added, by sector ----
+  # Data is with employment above
+  
+  gva_shares <- subset(oxford, Indicator %in% gva_inds) %>% 
+    subset(str_detect(Indicator, "Total", negate = T)) %>%
+    select(Group, Location, Indicator, Value = `2021`) %>%
+    group_by(Location, Group) %>% 
+    mutate(Indicator = str_replace(Indicator, ".*- ", "")) %>%
+    mutate(Indicator = str_replace(Indicator, "Transport, storage, information & communication services", "Transport & ICT")) %>%
+    mutate(Indicator = factor(Indicator, levels = sector_order)) %>%
+    mutate(Share = Value / sum(Value)) %>%
+    select(-Value) #%>%
+  # pivot_wider(names_from = Indicator, values_from = Share) %>%
+  # arrange(Group) %>% View()
+  
+  gva_shares2 <- gva_shares %>% 
+    ungroup() %>%
+    group_by(Group, Indicator) %>%
+    summarize(Share = median(Share), .groups = "drop") %>%
+    arrange(Group, Indicator)
+  
+  ylims_shares <- c(0, ceiling(max(emp_shares$Share, gva_shares$Share) * 10) /10)
+  
+  # emp_shares3 <- bind_rows(emp_shares, emp_shares2)
+  
+  emp_shares_plot <- emp_shares2 %>%
+    ggplot() +
+    geom_col(aes(x = Indicator, y = Share, fill = Group),
+             position = "dodge") +
+    # geom_text_repel(data = emp_shares, aes(x = Indicator, y = Share, label = Location), direction = "y", hjust = 0, nudge_x = 0.1, size = 2) +
+    # geom_text(data = emp_shares, aes(x = Indicator, y = Share, label = Location), hjust = 0, nudge_x = 0.1, size = 2) +
+    geom_point(data = emp_shares %>% filter(Location != city), aes(x = Indicator, y = Share, group = Group), shape = 21, color = "white", fill="dark grey",  position = position_nudge(x = .25)) +
+    # geom_point(data = emp_shares, aes(x = Indicator, y = Share)) +
+    scale_y_continuous(breaks = seq(0, 1, .05),
+                       minor_breaks = seq(0, 1, .01),
+                       limits = ylims_shares,
+                       expand = c(0,0),
+                       labels = scales::percent_format(accuracy = 1)) +
+    scale_fill_manual(values = hues) +
+    theme_minimal() +
+    theme(axis.line = element_line(linewidth = .5, color = "black"),
+          legend.position = "bottom",
+          legend.key.height = unit(1/8, "in")) +
+    labs(title = paste("Share of employment by sector in", city, "and median benchmark city"),
+         x = "Sector",
+         fill = "")
+  ggplot2:::print.ggplot(emp_shares_plot)
+  ggsave("plots/oxford-employment-sectors.png", plot = emp_shares_plot, device = "png",
+         width = 16, height = 5, units = "in", dpi = "print")
 }
 ```
 
@@ -1122,119 +1122,119 @@ ggsave("plots/oxford-employment-sectors.png", plot = emp_shares_plot, device = "
 if (in_oxford) {
   print_text("Sectors by GVA")
   print_paged_df(gva_shares2)
-gva_shares_plot <- gva_shares2 %>%
-  # arrange(Group, desc(Share)) %>%
-  # mutate(Indicator = str_replace(Indicator, "Transport, storage, information & communication services", "Transport & ICT"),
-  #        Indicator = factor(Indicator, levels = unique(Indicator))) %>%
-  ggplot() +
-  geom_col(aes(x = Indicator, y = Share, fill = Group),
-           position = "dodge") +
-  geom_point(data = gva_shares %>% filter(Location != city), aes(x = Indicator, y = Share, group = Group), shape = 21, color = "white", fill="dark grey", position = position_nudge(x = .25)) +
-  scale_y_continuous(breaks = seq(0, 1, .05),
-                     minor_breaks = seq(0, 1, .01),
-                     limits = ylims_shares,
-                     expand = c(0,0),
-                     labels = scales::percent_format(accuracy = 1)) +
-  scale_fill_manual(values = hues) +
-  theme_minimal() +
-  theme(axis.line = element_line(linewidth = .5, color = "black"),
-        legend.position = "bottom",
-        legend.key.height = unit(1/8, "in")) +
-  labs(title = paste("Share of GVA by sector in", city, "and median benchmark city"),
-       x = "Sector",
-       fill = "")
-ggplot2:::print.ggplot(gva_shares_plot)
-ggsave("plots/oxford-gva-sectors.png", plot = gva_shares_plot, device = "png",
-       width = 16, height = 5, units = "in", dpi = "print")
+  gva_shares_plot <- gva_shares2 %>%
+    # arrange(Group, desc(Share)) %>%
+    # mutate(Indicator = str_replace(Indicator, "Transport, storage, information & communication services", "Transport & ICT"),
+    #        Indicator = factor(Indicator, levels = unique(Indicator))) %>%
+    ggplot() +
+    geom_col(aes(x = Indicator, y = Share, fill = Group),
+             position = "dodge") +
+    geom_point(data = gva_shares %>% filter(Location != city), aes(x = Indicator, y = Share, group = Group), shape = 21, color = "white", fill="dark grey", position = position_nudge(x = .25)) +
+    scale_y_continuous(breaks = seq(0, 1, .05),
+                       minor_breaks = seq(0, 1, .01),
+                       limits = ylims_shares,
+                       expand = c(0,0),
+                       labels = scales::percent_format(accuracy = 1)) +
+    scale_fill_manual(values = hues) +
+    theme_minimal() +
+    theme(axis.line = element_line(linewidth = .5, color = "black"),
+          legend.position = "bottom",
+          legend.key.height = unit(1/8, "in")) +
+    labs(title = paste("Share of GVA by sector in", city, "and median benchmark city"),
+         x = "Sector",
+         fill = "")
+  ggplot2:::print.ggplot(gva_shares_plot)
+  ggsave("plots/oxford-gva-sectors.png", plot = gva_shares_plot, device = "png",
+         width = 16, height = 5, units = "in", dpi = "print")
 }
 ```
 
 ### Economic Inequality
 ```{r, echo = F, results = results_type}
 if (in_oxford) {
-# subset(oxford, !is.na(`Income Band`)) %>% select(`Income Band`) %>% unique() %>% subset(str_detect(`Income Band`, "PPP constant 20"))
-
-incomes <- oxford %>% subset(str_detect(Indicator, "PPP constant 2015 prices")) %>%
-  select(Location, `Income Band`, Group, starts_with("20")) %>% 
-  mutate(Band = str_extract(`Income Band`, "^[^\\s]*") %>% str_replace("�", "-") %>% str_replace_all(",000", "K") %>% str_replace_all(",500", ".5K"),
-         Band = case_when(Band == "Up" ~ "Up to $1,000", 
-                          Band == "Over" ~ "Over $250K",
-                          T ~ Band), 
-         Band = factor(Band, levels = unique(Band))) %>%
-  pivot_longer(cols = starts_with("20"), names_to = "Year", values_to = "Households") %>%
-  mutate(Households = 1000 * Households,
-         Year = as.numeric(Year))
+  # subset(oxford, !is.na(`Income Band`)) %>% select(`Income Band`) %>% unique() %>% subset(str_detect(`Income Band`, "PPP constant 20"))
   
-household_incomes_bar_plot <- incomes %>% group_by(Location)  %>%
-  subset(Year == 2021) %>%
-  mutate(Percent = Households / sum(Households), sum = sum(Households)) %>%
-  ungroup() %>%
-  group_by(Group, Band) %>%
-  summarize(Percent = median(Percent), .groups = "drop") %>%
-  ggplot(aes(y = Band, x = Percent, fill = Group)) +
-  geom_col(position = "dodge") +
-  scale_fill_manual(values = hues) +
-  scale_x_continuous(labels = scales::label_percent()) + 
-  theme_minimal() +
-  theme(axis.line = element_line(linewidth = .5, color = "black")) +
-        # legend.position = "bottom") +
-  labs(title = "Household income distribution (PPP constant 2015 dollars)",
-       x = "Percent of Households",
-       y = "Income Group")
-ggsave("plots/oxford-household-incomes-bar.png", plot = household_incomes_bar_plot, device = "png",
-       width = 8, height = 5, units = "in", dpi = "print")
-ggplot2:::print.ggplot(household_incomes_bar_plot)
-
-incomes_city <- incomes %>% subset(Location == city & Year < 2022 & Year >= 2002) %>%
-  group_by(Year) %>%
-  mutate(Percent = Households / sum(Households),
-         sum = sum(Households),
-         pct_sum = cumsum(Percent)) %>%
-  ungroup()
-
-# "$35K-70K", "$70K-100K", "$100K-150K", "$150K-200K", "$200K-$250K", "Over $250K"
-upper_income_bands <- c("$70K-100K", "$100K-150K", "$150K-200K", "$200K-$250K", "Over $250K")
-upper_income <- subset(incomes_city, Band %in% upper_income_bands) %>%
-  ungroup() %>%
-  group_by(Year) %>%
-  summarize(Households = sum(Households), Percent = sum(Percent), sum = sum[[1]], .groups = "drop") %>%
-  mutate(Location = city, Group = city, Band = "Over $70K")
-
-# "Up to $1,000", "$1K-2K" ,"$2K-5K", "$5K-7.5K", "$7.5K-10K"
-lower_income_bands <- c("Up to $1,000", "$1K-2K" ,"$2K-5K", "$5K-7.5K")
-lower_income <- subset(incomes_city, Band %in% lower_income_bands) %>%
-  ungroup() %>%
-  group_by(Year) %>%
-  summarize(Households = sum(Households), Percent = sum(Percent), sum = sum[[1]], .groups = "drop") %>%
-  mutate(Location = city, Group = city, Band = "Under $5K")
-
-incomes_city2 <- 
-  lower_income %>%
-  bind_rows(subset(incomes_city, Band %ni% c(upper_income_bands, lower_income_bands))) %>%
-  bind_rows(upper_income) %>% 
-  group_by(Year) %>%
-  mutate(pct_sum = cumsum(Percent),
-         Band = factor(Band, levels = c(lower_income$Band %>% unique(), levels(incomes_city$Band) %>% subset(. %ni% c(lower_income_bands, upper_income_bands)), upper_income$Band %>% unique()))) %>%
-  ungroup() %>%
-  filter(!is.na(Percent))
-
-household_incomes_area_plot <- ggplot(incomes_city2) +
-  geom_area(aes(x = Year, y = Percent, fill = forcats::fct_rev(Band)), color = "black", alpha = 0.8) +
-  geom_text_repel(data = subset(incomes_city2, Year == 2021), aes(label = Band, x = 2021, y = (pct_sum - Percent/2), color = forcats::fct_rev(Band)), 
-                  hjust = 0, size = 3, xlim = c(2021.25, 2030), box.padding = 0.02) +
-  scale_y_continuous(labels = scales::label_percent(),
-                     expand = expansion(mult = c(0,0))) + 
-  scale_x_continuous(minor_breaks = 2002:2030, limits = c(min(incomes_city2$Year), max(incomes_city2$Year) + 3),
-                     expand = expansion(mult = c(0,0))) + 
-  theme_minimal() +
-  theme(axis.line = element_line(linewidth = .5, color = "black"), legend.position = "none") +
-  labs(title = paste0("Household income distribution, ", min(incomes_city2$Year), "-2021 (PPP constant 2015 dollars)"),
-       y = "Percent of Households",
-       x = "Year")
-ggplot2:::print.ggplot(household_incomes_area_plot)
-ggsave("plots/oxford-household-incomes-area.png", plot = household_incomes_area_plot, device = "png",
-       # width = 16, height = 3.4, units = "in", dpi = "print")
-       width = 4, height = 3.5, units = "in", dpi = "print")
+  incomes <- oxford %>% subset(str_detect(Indicator, "PPP constant 2015 prices")) %>%
+    select(Location, `Income Band`, Group, starts_with("20")) %>% 
+    mutate(Band = str_extract(`Income Band`, "^[^\\s]*") %>% str_replace("�", "-") %>% str_replace_all(",000", "K") %>% str_replace_all(",500", ".5K"),
+           Band = case_when(Band == "Up" ~ "Up to $1,000", 
+                            Band == "Over" ~ "Over $250K",
+                            T ~ Band), 
+           Band = factor(Band, levels = unique(Band))) %>%
+    pivot_longer(cols = starts_with("20"), names_to = "Year", values_to = "Households") %>%
+    mutate(Households = 1000 * Households,
+           Year = as.numeric(Year))
+  
+  household_incomes_bar_plot <- incomes %>% group_by(Location)  %>%
+    subset(Year == 2021) %>%
+    mutate(Percent = Households / sum(Households), sum = sum(Households)) %>%
+    ungroup() %>%
+    group_by(Group, Band) %>%
+    summarize(Percent = median(Percent), .groups = "drop") %>%
+    ggplot(aes(y = Band, x = Percent, fill = Group)) +
+    geom_col(position = "dodge") +
+    scale_fill_manual(values = hues) +
+    scale_x_continuous(labels = scales::label_percent()) + 
+    theme_minimal() +
+    theme(axis.line = element_line(linewidth = .5, color = "black")) +
+    # legend.position = "bottom") +
+    labs(title = "Household income distribution (PPP constant 2015 dollars)",
+         x = "Percent of Households",
+         y = "Income Group")
+  ggsave("plots/oxford-household-incomes-bar.png", plot = household_incomes_bar_plot, device = "png",
+         width = 8, height = 5, units = "in", dpi = "print")
+  ggplot2:::print.ggplot(household_incomes_bar_plot)
+  
+  incomes_city <- incomes %>% subset(Location == city & Year < 2022 & Year >= 2002) %>%
+    group_by(Year) %>%
+    mutate(Percent = Households / sum(Households),
+           sum = sum(Households),
+           pct_sum = cumsum(Percent)) %>%
+    ungroup()
+  
+  # "$35K-70K", "$70K-100K", "$100K-150K", "$150K-200K", "$200K-$250K", "Over $250K"
+  upper_income_bands <- c("$70K-100K", "$100K-150K", "$150K-200K", "$200K-$250K", "Over $250K")
+  upper_income <- subset(incomes_city, Band %in% upper_income_bands) %>%
+    ungroup() %>%
+    group_by(Year) %>%
+    summarize(Households = sum(Households), Percent = sum(Percent), sum = sum[[1]], .groups = "drop") %>%
+    mutate(Location = city, Group = city, Band = "Over $70K")
+  
+  # "Up to $1,000", "$1K-2K" ,"$2K-5K", "$5K-7.5K", "$7.5K-10K"
+  lower_income_bands <- c("Up to $1,000", "$1K-2K" ,"$2K-5K", "$5K-7.5K")
+  lower_income <- subset(incomes_city, Band %in% lower_income_bands) %>%
+    ungroup() %>%
+    group_by(Year) %>%
+    summarize(Households = sum(Households), Percent = sum(Percent), sum = sum[[1]], .groups = "drop") %>%
+    mutate(Location = city, Group = city, Band = "Under $5K")
+  
+  incomes_city2 <- 
+    lower_income %>%
+    bind_rows(subset(incomes_city, Band %ni% c(upper_income_bands, lower_income_bands))) %>%
+    bind_rows(upper_income) %>% 
+    group_by(Year) %>%
+    mutate(pct_sum = cumsum(Percent),
+           Band = factor(Band, levels = c(lower_income$Band %>% unique(), levels(incomes_city$Band) %>% subset(. %ni% c(lower_income_bands, upper_income_bands)), upper_income$Band %>% unique()))) %>%
+    ungroup() %>%
+    filter(!is.na(Percent))
+  
+  household_incomes_area_plot <- ggplot(incomes_city2) +
+    geom_area(aes(x = Year, y = Percent, fill = forcats::fct_rev(Band)), color = "black", alpha = 0.8) +
+    geom_text_repel(data = subset(incomes_city2, Year == 2021), aes(label = Band, x = 2021, y = (pct_sum - Percent/2), color = forcats::fct_rev(Band)), 
+                    hjust = 0, size = 3, xlim = c(2021.25, 2030), box.padding = 0.02) +
+    scale_y_continuous(labels = scales::label_percent(),
+                       expand = expansion(mult = c(0,0))) + 
+    scale_x_continuous(minor_breaks = 2002:2030, limits = c(min(incomes_city2$Year), max(incomes_city2$Year) + 3),
+                       expand = expansion(mult = c(0,0))) + 
+    theme_minimal() +
+    theme(axis.line = element_line(linewidth = .5, color = "black"), legend.position = "none") +
+    labs(title = paste0("Household income distribution, ", min(incomes_city2$Year), "-2021 (PPP constant 2015 dollars)"),
+         y = "Percent of Households",
+         x = "Year")
+  ggplot2:::print.ggplot(household_incomes_area_plot)
+  ggsave("plots/oxford-household-incomes-area.png", plot = household_incomes_area_plot, device = "png",
+         # width = 16, height = 3.4, units = "in", dpi = "print")
+         width = 4, height = 3.5, units = "in", dpi = "print")
 }
 ```
 
@@ -1242,72 +1242,72 @@ ggsave("plots/oxford-household-incomes-area.png", plot = household_incomes_area_
 ### Urban built-up area
 ```{r, echo = F, results = results_type}
 if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
-# Urban built-up area ----
-wsf <- read_xlsx("Stats/WSF.xlsx", sheet = "WSF") %>%
-  rename(Year = 1) %>%
-  select(Year, uba_km2 = any_of(c("AREA_sq_km", "cumulative sq km"))) %>%
-  mutate(growth = (uba_km2 / lag(uba_km2) - 1), growth_km2 = uba_km2 - lag(uba_km2))
-uba_plot <- wsf %>%
-  ggplot +
-  geom_line(aes(x = Year, y = uba_km2)) +
-  scale_x_continuous(
-    breaks = seq(1985, 2020, 5),
-    minor_breaks = seq(1985, 2021, 1)) + 
-  scale_y_continuous(labels = scales::comma, limits = c(0, max(wsf$uba_km2))) +
-  theme_minimal() +
-  labs(title = "",#paste(city, "Urban Built-up Area, 1985-2015"),
-       y = bquote('Urban built-up area,'~km^2)) +
-  theme(axis.line = element_line(linewidth = .5, color = "black"))
-ggsave("plots/wsf-uba-plot.png", plot = uba_plot, device = "png",
-       width = 4, height = 3.5, units = "in", dpi = "print")
-ggplot2:::print.ggplot(uba_plot)
-
-first_area <- wsf$uba_km2[1]
-latest_area <- tail(wsf$uba_km2, 1)
-first_year <- wsf$Year[1]
-latest_year <- tail(wsf$Year, 1)
-pct_growth <- 100 * (latest_area - first_area)/first_area
-print_text(paste0("The city's built-up area grew from ", round(first_area, 2), " km^2 in ", first_year, " to ", round(latest_area, 2), " in ", latest_year, " for ", round(pct_growth, 2), "% growth"))
-
-print_paged_df(wsf)
-# mean(head(wsf$growth, 10), na.rm = T)
-# mean(head(wsf$growth_km2, 10), na.rm = T)
-# 
-# tail(wsf, 12)
-# mean(tail(wsf$growth, 12))
-# mean(tail(wsf$growth_km2, 12))
-
-## Growth rate
-# wsf %>%
-#   ggplot +
-#   geom_line(aes(x = Year, y = growth)) +
-#   scale_x_continuous(
-#     breaks = seq(1985, 2020, 5),
-#     minor_breaks = seq(1985, 2021, 1)) +
-#   scale_y_continuous(labels = scales::comma) +
-#   theme_minimal()
-
-# # rolling average
-# wsf %>%
-#   mutate(rolling_growth = (growth + lag(growth) + lead(growth)) / 3) %>%
-#   ggplot +
-#   geom_line(aes(x = Year, y = rolling_growth)) +
-#   scale_x_continuous(
-#     breaks = seq(1985, 2020, 5),
-#     minor_breaks = seq(1985, 2021, 1)) + 
-#   scale_y_continuous(labels = scales::comma) +
-#   theme_minimal() +
-#   labs(title = "Growth rate (%), 3-year rolling average")
-# wsf %>%
-#   mutate(rolling_growth_km2 = (growth_km2 + lag(growth_km2) + lead(growth_km2)) / 3) %>%
-#   ggplot +
-#   geom_line(aes(x = Year, y = rolling_growth_km2)) +
-#   scale_x_continuous(
-#     breaks = seq(1985, 2020, 5),
-#     minor_breaks = seq(1985, 2021, 1)) + 
-#   scale_y_continuous(labels = scales::comma, limits = c(0,10), expand = expansion(c(0, NA))) +
-#   theme_minimal() +
-#   labs(title = "Growth rate (sq. km/yr), 3-year rolling average")
+  # Urban built-up area ----
+  wsf <- read_xlsx("Stats/WSF.xlsx", sheet = "WSF") %>%
+    rename(Year = 1) %>%
+    select(Year, uba_km2 = any_of(c("AREA_sq_km", "cumulative sq km"))) %>%
+    mutate(growth = (uba_km2 / lag(uba_km2) - 1), growth_km2 = uba_km2 - lag(uba_km2))
+  uba_plot <- wsf %>%
+    ggplot +
+    geom_line(aes(x = Year, y = uba_km2)) +
+    scale_x_continuous(
+      breaks = seq(1985, 2020, 5),
+      minor_breaks = seq(1985, 2021, 1)) + 
+    scale_y_continuous(labels = scales::comma, limits = c(0, max(wsf$uba_km2))) +
+    theme_minimal() +
+    labs(title = "",#paste(city, "Urban Built-up Area, 1985-2015"),
+         y = bquote('Urban built-up area,'~km^2)) +
+    theme(axis.line = element_line(linewidth = .5, color = "black"))
+  ggsave("plots/wsf-uba-plot.png", plot = uba_plot, device = "png",
+         width = 4, height = 3.5, units = "in", dpi = "print")
+  ggplot2:::print.ggplot(uba_plot)
+  
+  first_area <- wsf$uba_km2[1]
+  latest_area <- tail(wsf$uba_km2, 1)
+  first_year <- wsf$Year[1]
+  latest_year <- tail(wsf$Year, 1)
+  pct_growth <- 100 * (latest_area - first_area)/first_area
+  print_text(paste0("The city's built-up area grew from ", round(first_area, 2), " km^2 in ", first_year, " to ", round(latest_area, 2), " in ", latest_year, " for ", round(pct_growth, 2), "% growth"))
+  
+  print_paged_df(wsf)
+  # mean(head(wsf$growth, 10), na.rm = T)
+  # mean(head(wsf$growth_km2, 10), na.rm = T)
+  # 
+  # tail(wsf, 12)
+  # mean(tail(wsf$growth, 12))
+  # mean(tail(wsf$growth_km2, 12))
+  
+  ## Growth rate
+  # wsf %>%
+  #   ggplot +
+  #   geom_line(aes(x = Year, y = growth)) +
+  #   scale_x_continuous(
+  #     breaks = seq(1985, 2020, 5),
+  #     minor_breaks = seq(1985, 2021, 1)) +
+  #   scale_y_continuous(labels = scales::comma) +
+  #   theme_minimal()
+  
+  # # rolling average
+  # wsf %>%
+  #   mutate(rolling_growth = (growth + lag(growth) + lead(growth)) / 3) %>%
+  #   ggplot +
+  #   geom_line(aes(x = Year, y = rolling_growth)) +
+  #   scale_x_continuous(
+  #     breaks = seq(1985, 2020, 5),
+  #     minor_breaks = seq(1985, 2021, 1)) + 
+  #   scale_y_continuous(labels = scales::comma) +
+  #   theme_minimal() +
+  #   labs(title = "Growth rate (%), 3-year rolling average")
+  # wsf %>%
+  #   mutate(rolling_growth_km2 = (growth_km2 + lag(growth_km2) + lead(growth_km2)) / 3) %>%
+  #   ggplot +
+  #   geom_line(aes(x = Year, y = rolling_growth_km2)) +
+  #   scale_x_continuous(
+  #     breaks = seq(1985, 2020, 5),
+  #     minor_breaks = seq(1985, 2021, 1)) + 
+  #   scale_y_continuous(labels = scales::comma, limits = c(0,10), expand = expansion(c(0, NA))) +
+  #   theme_minimal() +
+  #   labs(title = "Growth rate (sq. km/yr), 3-year rolling average")
 }
 ```
 
@@ -1395,7 +1395,7 @@ ggdonut <- function(data, category, percent_col, colors, title) {
   # sprintf("%1.2f%%", 100*data[,percent_col])
   data$label[data[,percent_col] < .02] <- "" 
   data$label_position <- (data$max + data$min) / 2
-
+  
   p <- ggplot(data, aes(ymax = .data[["max"]], ymin = .data[["min"]], xmax = 4, xmin = 3, fill = .data[[category]])) +
     geom_rect(color = "white") +
     geom_text(x = 3.5, aes(y = label_position, label = label)) +
@@ -1534,7 +1534,7 @@ ggsave("plots/wsf-slope-pieplot.png", device = "png",
 flood_string <- function(flood_type) {
   osmpt <- read_xls(paste0("Stats/", flood_type, "_osmpt.xls"))[,1:4] %>% distinct()
   major_roads <- read_xls(paste0("Stats/", flood_type, "_majorroad.xls")) %>% tryCatch(error = function(e) return(data.frame(OID = 0, gridcode = 0, LENGTH = 0, PERCENTAGE = 0)))
-
+  
   roads_pct <- major_roads$PERCENTAGE[major_roads$gridcode == 1] %>% round(0)
   police_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_police" & osmpt$gridcode == 1]
   police_ct_nf <- osmpt$PNT_COUNT[osmpt$source == "osm_police" & osmpt$gridcode == 0] + police_ct
@@ -1544,7 +1544,7 @@ flood_string <- function(flood_type) {
   school_ct_nf <- osmpt$PNT_COUNT[osmpt$source == "osm_schools" & osmpt$gridcode == 0] + school_ct
   fire_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_fire" & osmpt$gridcode == 1]
   fire_ct_nf <- osmpt$PNT_COUNT[osmpt$source == "osm_fire" & osmpt$gridcode == 0] + fire_ct
-
+  
   flood_type_long <- if (flood_type == "fu") "riverine" else if (flood_type == "pu") "surface water" else "riverine or surface water"
   
   string <- paste0(
@@ -1570,52 +1570,52 @@ gather_flood_data <- function(flood_type) {
 }
 flood_pop_area <- function(flood_type) {
   read_xls(paste0("Stats/", flood_type, "_pop_area.xls")) %>% 
-  arrange(VALUE) %>% 
-  rename(Area = VALUE_1) %>%
-  mutate(Total_Pop_Area = sum(Area),
-         Percentage = Area/Total_Pop_Area) %>%
-  filter(VALUE == 1) %>%
-  rename(Flood_Pop_Area = Area) 
+    arrange(VALUE) %>% 
+    rename(Area = VALUE_1) %>%
+    mutate(Total_Pop_Area = sum(Area),
+           Percentage = Area/Total_Pop_Area) %>%
+    filter(VALUE == 1) %>%
+    rename(Flood_Pop_Area = Area) 
 }
 ```
 
 ### Fluvial
 ```{r, echo = F, results = results_type}
 if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
-fu <- gather_flood_data("fu")
-
-fu_plot <- fu %>%
-  ggplot +
-  geom_line(aes(x = Year, y = uba_km2)) +
-  scale_x_continuous(
-    breaks = seq(1985, 2020, 5),
-    minor_breaks = seq(1985, 2021, 1)) + 
-  scale_y_continuous(labels = scales::comma, limits = c(0, max(fu$uba_km2)), expand = c(0, NA)) +
-  theme_minimal() +
-  labs(title = "",#paste(city, "Built-Up Area Exposed to River Flooding Historical Growth, 1985-2015"),
-       y = bquote('Exposed'~km^2)) +
-  theme(axis.line = element_line(linewidth = .5, color = "black"),
-        axis.title.x = element_blank())
-ggplot2:::print.ggplot(fu_plot)
-ggsave("plots/wsf-fu-plot.png", plot = fu_plot, device = "png",
-       width = 4, height = 3.5, units = "in", dpi = "print")
-# fu %>%
-#   ggplot +
-#   geom_line(aes(x = Year, y = percent_uba)) +
-#   scale_x_continuous(
-#     breaks = seq(1985, 2020, 5),
-#     minor_breaks = seq(1985, 2021, 1)) + 
-#   scale_y_continuous(labels = scales::percent, limits = c(0, max(fu$percent_uba)), expand = c(0, NA)) +
-#   theme_minimal() +
-#   labs(title = "",#paste(city, "Built-Up Area Exposed to River Flooding Historical Growth, 1985-2015"),
-#        y = bquote('Exposed'~km^2)) +
-#   theme(axis.line = element_line(linewidth = .5, color = "black"),
-#         axis.title.x = element_blank())
-
-# print_paged_df(fu)
-print_paged_df(bind_rows(head(fu, 1), tail(fu, 1)))
-print_text(paste("In", fu[1,1], ",", round(fu[1,2], 2), "km^2 of the built-up area was exposed to river flooding at a minimum depth of 15 cm"))
-print_text(paste("Percentage of highest populated area exposed to fluvial flooding:", flood_pop_area("fu")$Percentage %>% scales::percent()))
+  fu <- gather_flood_data("fu")
+  
+  fu_plot <- fu %>%
+    ggplot +
+    geom_line(aes(x = Year, y = uba_km2)) +
+    scale_x_continuous(
+      breaks = seq(1985, 2020, 5),
+      minor_breaks = seq(1985, 2021, 1)) + 
+    scale_y_continuous(labels = scales::comma, limits = c(0, max(fu$uba_km2)), expand = c(0, NA)) +
+    theme_minimal() +
+    labs(title = "",#paste(city, "Built-Up Area Exposed to River Flooding Historical Growth, 1985-2015"),
+         y = bquote('Exposed'~km^2)) +
+    theme(axis.line = element_line(linewidth = .5, color = "black"),
+          axis.title.x = element_blank())
+  ggplot2:::print.ggplot(fu_plot)
+  ggsave("plots/wsf-fu-plot.png", plot = fu_plot, device = "png",
+         width = 4, height = 3.5, units = "in", dpi = "print")
+  # fu %>%
+  #   ggplot +
+  #   geom_line(aes(x = Year, y = percent_uba)) +
+  #   scale_x_continuous(
+  #     breaks = seq(1985, 2020, 5),
+  #     minor_breaks = seq(1985, 2021, 1)) + 
+  #   scale_y_continuous(labels = scales::percent, limits = c(0, max(fu$percent_uba)), expand = c(0, NA)) +
+  #   theme_minimal() +
+  #   labs(title = "",#paste(city, "Built-Up Area Exposed to River Flooding Historical Growth, 1985-2015"),
+  #        y = bquote('Exposed'~km^2)) +
+  #   theme(axis.line = element_line(linewidth = .5, color = "black"),
+  #         axis.title.x = element_blank())
+  
+  # print_paged_df(fu)
+  print_paged_df(bind_rows(head(fu, 1), tail(fu, 1)))
+  print_text(paste("In", fu[1,1], ",", round(fu[1,2], 2), "km^2 of the built-up area was exposed to river flooding at a minimum depth of 15 cm"))
+  print_text(paste("Percentage of highest populated area exposed to fluvial flooding:", flood_pop_area("fu")$Percentage %>% scales::percent()))
 }
 print_text(flood_string("fu"))
 ```
@@ -1623,42 +1623,42 @@ print_text(flood_string("fu"))
 ### Pluvial
 ```{r, echo = F}
 if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
-pu <- gather_flood_data("pu")
-pu_plot <- pu %>%
-  ggplot +
-  geom_line(aes(x = Year, y = uba_km2)) +
-  scale_x_continuous(
-    breaks = seq(1985, 2020, 5),
-    minor_breaks = seq(1985, 2021, 1)) + 
-  scale_y_continuous(labels = scales::comma, limits = c(0, max(pu$uba_km2)), expand = c(0, NA)) +
-  theme_minimal() +
-  labs(title = "",#paste(city, "Built-Up Area Exposed to Rainwater Flooding Historical Growth, 1985-2015"),
-       y = bquote('Exposed'~km^2)) +
-  theme(axis.line = element_line(linewidth = .5, color = "black"),
-        axis.title.x = element_blank())
-ggplot2:::print.ggplot(pu_plot)
-ggsave("plots/wsf-pu-plot.png", plot = pu_plot, device = "png",
-       width = 4, height = 3.5, units = "in", dpi = "print")
-
-# pu %>%
-#   ggplot +
-#   geom_line(aes(x = Year, y = percent_uba)) +
-#   scale_x_continuous(
-#     breaks = seq(1985, 2020, 5),
-#     minor_breaks = seq(1985, 2021, 1)) + 
-#   scale_y_continuous(labels = scales::percent, limits = c(0, max(pu$percent_uba)), expand = c(0, NA)) +
-#   theme_minimal() +
-#   labs(title = "",#paste(city, "Built-Up Area Exposed to Rainwater Flooding Historical Growth, 1985-2015"),
-#        y = bquote('Exposed'~km^2)) +
-#   theme(axis.line = element_line(linewidth = .5, color = "black"),
-#         axis.title.x = element_blank())
-
-# print_paged_df(pu)
-print_paged_df(bind_rows(head(pu, 1), tail(pu, 1)))
-print_text(paste("In", pu[1,1], ",", round(pu[1,2], 2), "km^2 of the built-up area was exposed to surface water flooding at a minimum depth of 15 cm"))
-print_text(paste("Percentage of highest populated area exposed to pluvial flooding:", flood_pop_area("pu")$Percentage %>% scales::percent()))
-
-# pu %>% mutate(diff = pu$uba_km2 - lag(pu$uba_km2)) %>% .$diff %>% mean(na.rm = T) 
+  pu <- gather_flood_data("pu")
+  pu_plot <- pu %>%
+    ggplot +
+    geom_line(aes(x = Year, y = uba_km2)) +
+    scale_x_continuous(
+      breaks = seq(1985, 2020, 5),
+      minor_breaks = seq(1985, 2021, 1)) + 
+    scale_y_continuous(labels = scales::comma, limits = c(0, max(pu$uba_km2)), expand = c(0, NA)) +
+    theme_minimal() +
+    labs(title = "",#paste(city, "Built-Up Area Exposed to Rainwater Flooding Historical Growth, 1985-2015"),
+         y = bquote('Exposed'~km^2)) +
+    theme(axis.line = element_line(linewidth = .5, color = "black"),
+          axis.title.x = element_blank())
+  ggplot2:::print.ggplot(pu_plot)
+  ggsave("plots/wsf-pu-plot.png", plot = pu_plot, device = "png",
+         width = 4, height = 3.5, units = "in", dpi = "print")
+  
+  # pu %>%
+  #   ggplot +
+  #   geom_line(aes(x = Year, y = percent_uba)) +
+  #   scale_x_continuous(
+  #     breaks = seq(1985, 2020, 5),
+  #     minor_breaks = seq(1985, 2021, 1)) + 
+  #   scale_y_continuous(labels = scales::percent, limits = c(0, max(pu$percent_uba)), expand = c(0, NA)) +
+  #   theme_minimal() +
+  #   labs(title = "",#paste(city, "Built-Up Area Exposed to Rainwater Flooding Historical Growth, 1985-2015"),
+  #        y = bquote('Exposed'~km^2)) +
+  #   theme(axis.line = element_line(linewidth = .5, color = "black"),
+  #         axis.title.x = element_blank())
+  
+  # print_paged_df(pu)
+  print_paged_df(bind_rows(head(pu, 1), tail(pu, 1)))
+  print_text(paste("In", pu[1,1], ",", round(pu[1,2], 2), "km^2 of the built-up area was exposed to surface water flooding at a minimum depth of 15 cm"))
+  print_text(paste("Percentage of highest populated area exposed to pluvial flooding:", flood_pop_area("pu")$Percentage %>% scales::percent()))
+  
+  # pu %>% mutate(diff = pu$uba_km2 - lag(pu$uba_km2)) %>% .$diff %>% mean(na.rm = T) 
 }
 print_text(flood_string("pu"))
 ```
@@ -1666,51 +1666,51 @@ print_text(flood_string("pu"))
 ### Combined Fluvial & Pluvial
 ```{r, echo = F}
 if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
-pufu <- gather_flood_data("comb")
-pufu <- bind_rows(
-fu %>% mutate(type = "River"),
-pu %>% mutate(type = "Rainwater"),
-pufu %>% mutate(type = "Combined")
-)
-
-pufu_plot <- pufu %>%
-  # subset(type == "Combined") %>%
-  ggplot(aes(x = Year, y = uba_km2, color = type)) +
-  geom_line() +
-  scale_x_continuous(
-    breaks = seq(1985, 2020, 5),
-    minor_breaks = seq(1985, 2021, 1)) + 
-  scale_y_continuous(labels = scales::comma, limits = c(0, max(pufu$uba_km2)), expand = c(0, NA)) +
-  theme_minimal() +
-  theme(legend.position = "bottom") +
-  labs(title = "",#paste(city, "Built-Up Area Exposed to River & Rainwater Flooding, 1985-2015"),
-       y = bquote('Exposed'~km^2), color = "") +
-  theme(axis.line = element_line(linewidth = .5, color = "black"),
-        axis.title.x = element_blank())
-ggplot2:::print.ggplot(pufu_plot)
-ggsave("plots/wsf-pufu-plot.png", plot = pufu_plot, device = "png",
-       width = 4, height = 3.5, units = "in", dpi = "print")
-
-# pufu %>%
-#   # subset(type == "Combined") %>%
-#   ggplot(aes(x = Year, y = percent_uba, color = type)) +
-#   geom_line() +
-#   scale_x_continuous(
-#     breaks = seq(1985, 2020, 5),
-#     minor_breaks = seq(1985, 2021, 1)) + 
-#   scale_y_continuous(labels = scales::percent, limits = c(0, max(pufu$percent_uba)), expand = c(0, NA)) +
-#   theme_minimal() +
-#   theme(legend.position = "bottom") +
-#   labs(title = "",#paste(city, "Built-Up Area Exposed to River & Rainwater Flooding, 1985-2015"),
-#        y = bquote('Exposed'~km^2), color = "") +
-#   theme(axis.line = element_line(linewidth = .5, color = "black"),
-#         axis.title.x = element_blank())
-
-comb <- subset(pufu, type == "Combined")
-# comb %>% mutate(diff = comb$uba_km2 - lag(comb$uba_km2)) %>% .$diff %>% mean(na.rm = T) 
-print_paged_df(bind_rows(head(comb, 1), tail(comb, 1)))
-print_text(paste("In", comb[1,1], ",", round(comb[1,2], 2), "km^2 of the built-up area was exposed to river or surface water flooding at a minimum depth of 15 cm"))
-print_text(paste("Percentage of highest populated area exposed to combined flooding:", flood_pop_area("comb")$Percentage %>% scales::percent()))
+  pufu <- gather_flood_data("comb")
+  pufu <- bind_rows(
+    fu %>% mutate(type = "River"),
+    pu %>% mutate(type = "Rainwater"),
+    pufu %>% mutate(type = "Combined")
+  )
+  
+  pufu_plot <- pufu %>%
+    # subset(type == "Combined") %>%
+    ggplot(aes(x = Year, y = uba_km2, color = type)) +
+    geom_line() +
+    scale_x_continuous(
+      breaks = seq(1985, 2020, 5),
+      minor_breaks = seq(1985, 2021, 1)) + 
+    scale_y_continuous(labels = scales::comma, limits = c(0, max(pufu$uba_km2)), expand = c(0, NA)) +
+    theme_minimal() +
+    theme(legend.position = "bottom") +
+    labs(title = "",#paste(city, "Built-Up Area Exposed to River & Rainwater Flooding, 1985-2015"),
+         y = bquote('Exposed'~km^2), color = "") +
+    theme(axis.line = element_line(linewidth = .5, color = "black"),
+          axis.title.x = element_blank())
+  ggplot2:::print.ggplot(pufu_plot)
+  ggsave("plots/wsf-pufu-plot.png", plot = pufu_plot, device = "png",
+         width = 4, height = 3.5, units = "in", dpi = "print")
+  
+  # pufu %>%
+  #   # subset(type == "Combined") %>%
+  #   ggplot(aes(x = Year, y = percent_uba, color = type)) +
+  #   geom_line() +
+  #   scale_x_continuous(
+  #     breaks = seq(1985, 2020, 5),
+  #     minor_breaks = seq(1985, 2021, 1)) + 
+  #   scale_y_continuous(labels = scales::percent, limits = c(0, max(pufu$percent_uba)), expand = c(0, NA)) +
+  #   theme_minimal() +
+  #   theme(legend.position = "bottom") +
+  #   labs(title = "",#paste(city, "Built-Up Area Exposed to River & Rainwater Flooding, 1985-2015"),
+  #        y = bquote('Exposed'~km^2), color = "") +
+  #   theme(axis.line = element_line(linewidth = .5, color = "black"),
+  #         axis.title.x = element_blank())
+  
+  comb <- subset(pufu, type == "Combined")
+  # comb %>% mutate(diff = comb$uba_km2 - lag(comb$uba_km2)) %>% .$diff %>% mean(na.rm = T) 
+  print_paged_df(bind_rows(head(comb, 1), tail(comb, 1)))
+  print_text(paste("In", comb[1,1], ",", round(comb[1,2], 2), "km^2 of the built-up area was exposed to river or surface water flooding at a minimum depth of 15 cm"))
+  print_text(paste("Percentage of highest populated area exposed to combined flooding:", flood_pop_area("comb")$Percentage %>% scales::percent()))
 }
 print_text(flood_string("comb"))
 ```
@@ -1774,7 +1774,7 @@ flood_lines <- flood_text %>%
 
 x_axis_ticks <- tibble(date = c(as.Date("1985-01-01"), seq(as.Date("1990-01-01"),as.Date("2020-12-31"), by = "10 year")), year = lubridate::year(date)) %>%
   bind_rows(tibble(date = seq(as.Date("1995-01-01"),as.Date("2020-12-31"), by = "10 year"), year = NA))
-   
+
 x_axis_years <- data.frame(x = seq(as.Date("1984-01-01"), as.Date("2020-12-31"), by = "years"), y = 0)
 x_axis_months <- data.frame(x = seq(as.Date("1984-01-01"), as.Date("2020-12-31"), by = "2 months"), y = 0)
 
@@ -1813,7 +1813,7 @@ get_earthquake_data <- function() {
                    set_cookies(`csrftoken` = "CJOWAoXjdFb7fL1Xf3asS9mj6GVJmbvvIKj365nRxupF27lO5UfkZECjtZoHLuuD"),
                    encode = encode,
                    query = list(minYear = 1900),
-                                maxYear = lubridate::year(Sys.Date()))
+                   maxYear = lubridate::year(Sys.Date()))
   eq_json <- content(response, "text")
   eq <- jsonlite::fromJSON(eq_json) %>% .[[1]] %>%
     as_tibble()
@@ -1848,17 +1848,17 @@ eq_text <- eq %>%
          magXdist = eqMagnitude * (2000 - units::drop_units(distance))) %>%
   filter(
     (damageAmountOrder >= 2 | damageMillionsDollars >= 1 |
-    deaths >= 10 | deathsAmountOrder >= 2 |
-    eqMagnitude >= 7.5 |
-    intensity >= 10 |
-    !is.na(tsunamiEventId)) &
-    distance < units::set_units(1000, km)) %>%
+       deaths >= 10 | deathsAmountOrder >= 2 |
+       eqMagnitude >= 7.5 |
+       intensity >= 10 |
+       !is.na(tsunamiEventId)) &
+      distance < units::set_units(1000, km)) %>%
   mutate(
     location = gsub("([\\s-][A-Z])([A-Z]*)", "\\1\\L\\2", locationName, perl = T) %>% str_extract("[^:][\\s]+.*") %>% trimws(),
     fatalities = paste(scales::label_comma()(deaths), "fatalities"),
     fatalities = str_replace_all(fatalities,
                                  c("1 fatalities" = "1 fatality",
-                                    "NA fatalities" = "")),
+                                   "NA fatalities" = "")),
     damage = paste(damages[as.character(damageAmountOrder)], "damage"),
     day = case_when(is.na(day) ~ 1, T ~ day),
     BEGAN = as.Date(paste(year, month, day, sep='-'))) %>%
@@ -1926,7 +1926,7 @@ ggsave("plots/ngdc-earthquake-events.pdf", device = "pdf",
 #   geom_point(data = slice_max(eq_text, magXdist, n = 15), aes(x = distance, y = eqMagnitude), color = "gold")
 eq_text %>% filter(units::drop_units(distance) < 500)
 ```
-  
+
 # Photovoltaic Potential (PV)
 ```{r, echo = F}
 files <- list.files(pv_path) %>% 
@@ -1985,13 +1985,13 @@ missing_plots <- filter(slide_list, filename %ni% plots & type == "plot") %>%
   filter(conditions != "none") %>%
   filter(!in_oxford & conditions != "oxford")
 # Use the following to make a warning instead of printing a table
-  # mutate(
-  #   slide_number = paste(section, section_order, sep = "."),
-  #   # gap = 27 - nchar(filename),
-  #   slide = leading_zeros(substr(slide, 1, 10), length = 10, filler = " ", trailing = T),
-  #   filename = leading_zeros(filename, length = 28, filler = " ", trailing = T),
-  #   warning_message = paste0(slide, ": ", filename, warning_text),
-  #   .keep = "none")
+# mutate(
+#   slide_number = paste(section, section_order, sep = "."),
+#   # gap = 27 - nchar(filename),
+#   slide = leading_zeros(substr(slide, 1, 10), length = 10, filler = " ", trailing = T),
+#   filename = leading_zeros(filename, length = 28, filler = " ", trailing = T),
+#   warning_message = paste0(slide, ": ", filename, warning_text),
+#   .keep = "none")
 # warning(paste0("missing maps:\n", paste(missing_maps$warning_message, collapse = "\n")))
 
 if (nrow(missing_plots) > 0) {
