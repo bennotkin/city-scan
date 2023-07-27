@@ -11,8 +11,8 @@ nearby_countries_string <- "cambodia|vietnam|thailand|myanmar|burma|malays|brune
 
 # Oxford Economics
 # Is city in Oxford Economics?
-# oxford_locations <- read_csv("../../03-multi-scan-materials/oxford-locations.csv", col_types = "c")
-# filter(oxford_locations, Country == country)
+# oxford_locations <- readr::read_csv("../../03-multi-scan-materials/oxford-locations.csv", col_types = "c")
+# dplyr::filter(oxford_locations, Country == country)
 in_oxford <- F
 # If there is no Oxford data, manually set population
 # population_manual <- 

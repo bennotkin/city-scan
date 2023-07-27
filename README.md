@@ -41,7 +41,7 @@ A couple datasets are not included in the repo
 
 ## First steps, after cloning
 1. Edit variables in `user-inputs.R`, including paths to locally downloaded files
-2. Download relevant directories from [Sharepoint](https://worldbankgroup-my.sharepoint.com/:f:/r/personal/tgertin_worldbank_org/Documents/city_scan2?csf=1&web=1&e=E28Xaz), and place in directory. It may be necessary to download in multiple batches.
+2. Download relevant directories (see below) from [Sharepoint](https://worldbankgroup-my.sharepoint.com/:f:/r/personal/tgertin_worldbank_org/Documents/city_scan2?csf=1&web=1&e=E28Xaz), and place in directory. It may be necessary to download in multiple batches.
    1. `AOI/`
    2. `Maps/`
    3. `Stats/`
@@ -49,6 +49,7 @@ A couple datasets are not included in the repo
       - `*_radar_plot.png`
       - `*_network_plot.png`
       - `*_network_plus_building_footprints.png`
+   5. `toms_outputs/*_age_distribution.csv` (may be located in demographics/ folder; place in the main directory)
 3. Copy all files in `Maps/` into `scan/Links/`
 4. Run `city-scan-calculations.Rmd`
 5. Make any necessary legibility edits to `darthmouth_flood_events.pdf` and `ngdc-earthquake-events.pdf`

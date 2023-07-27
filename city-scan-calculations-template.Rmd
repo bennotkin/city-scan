@@ -1970,7 +1970,7 @@ ggsave("plots/monthly-pv.png", device = "png",
 ```
 
 ## Plots Check
-```{r}
+```{r, echo = F, results = results_type}
 # This checks which maps are missing. I could do the same for plots, but would need to be at end of document
 slide_list <- read_csv("slide-list.csv", col_types = "cccddcc")
 plots <- list.files("plots")
@@ -1996,6 +1996,6 @@ missing_plots <- filter(slide_list, filename %ni% plots & type == "plot") %>%
 
 if (nrow(missing_plots) > 0) {
   print_text("The following plots have not been made. Why not?")
-  missing_plots %>% select(slide, filename, warning_text)
+  print_paged_df(missing_plots %>% select(slide, filename, warning_text))
 }
 ```
