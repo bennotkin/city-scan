@@ -23,6 +23,7 @@ library(curl)
 library(dplyr)
 library(rvest)
 library(units)
+library(exactextractr)
 
 country_groups <- read_csv("https://raw.githubusercontent.com/compoundrisk/monitor/databricks/src/country-groups.csv")
 source("https://raw.githubusercontent.com/compoundrisk/monitor/databricks/src/fns/helpers.R")
@@ -1860,7 +1861,7 @@ eq_text <- eq %>%
                                  c("1 fatalities" = "1 fatality",
                                    "NA fatalities" = "")),
     damage = paste(damages[as.character(damageAmountOrder)], "damage"),
-    day = case_when(is.na(day) ~ 1, T ~ day),
+    day = replace_na(day, 1),
     BEGAN = as.Date(paste(year, month, day, sep='-'))) %>%
   arrange(BEGAN) %>%
   mutate(

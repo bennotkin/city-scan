@@ -32,16 +32,15 @@ Doing so will create a directory with the starting pieces for a new scan.
   - `template-city-scan.idml`
 
 ## Not in the directory
-You will also need the following files which are not in the directory. These files are used by all or multiple city scans. Some of these are stored in a separate repo, which you can clone with `git clone https://github.com/bennotkin/multi-scan-materials.git`. I recommend cloning this to a location outside the folder created by the previous cloning, as these files will be used by many scans.
+You will also need the following files which are not in the directory. These files are used by all or multiple city scans. Some of these are stored in a separate repo, which you can clone with `git clone https://github.com/bennotkin/multi-scan-materials.git`. I recommend cloning this to a location outside the folder created by the previous cloning, as these files will be used by many scans. (See [Suggested directory structure](#Suggested-directory-structure) below.)
 
 A couple datasets are not included in the repo
 
-1. Oxford Economics (internal only)
+1. Oxford Economics (internal only, request from CRP team member)
 2. Photovoltaics (different dataset per country: download the *_GISdata_LTAy_YearlyMonthlyTotals_GlobalSolarAtlas-v2_GEOTIFF/ version from https://globalsolaratlas.info/download/ after selecting the appropriate country)
 
 ## First steps, after cloning
-1. Edit variables in `user-inputs.R`, including paths to locally downloaded files
-2. Download relevant directories (see below) from [Sharepoint](https://worldbankgroup-my.sharepoint.com/:f:/r/personal/tgertin_worldbank_org/Documents/city_scan2?csf=1&web=1&e=E28Xaz), and place in directory. It may be necessary to download in multiple batches.
+1. Download relevant directories (see below) from [Sharepoint](https://worldbankgroup-my.sharepoint.com/:f:/r/personal/tgertin_worldbank_org/Documents/city_scan2?csf=1&web=1&e=E28Xaz), and place in directory. It may be necessary to download in multiple batches.
    1. `AOI/`
    2. `Maps/`
    3. `Stats/`
@@ -50,11 +49,27 @@ A couple datasets are not included in the repo
       - `*_network_plot.png`
       - `*_network_plus_building_footprints.png`
    5. `toms_outputs/*_age_distribution.csv` (may be located in demographics/ folder; place in the main directory)
-3. Copy all files in `Maps/` into `scan/Links/`
-4. Run `city-scan-calculations.Rmd`
-5. Make any necessary legibility edits to `darthmouth_flood_events.pdf` and `ngdc-earthquake-events.pdf`
-6. Copy all files in `plots/` into `scan/Links/`
-7. Open the InDesign file. You may be asked to relink the missing files. Relinking one to the scan/Links/ folder should relink all of other files (except those that do not exist.)
+2. Edit variables in `user-inputs.R`, including paths to locally downloaded files
+3. Run `city-scan-calculations.Rmd`
+4. Make any necessary legibility edits to `darthmouth_flood_events.pdf` and `ngdc-earthquake-events.pdf`
+5. Copy all files in `plots/` into `scan/Links/`
+6. Open the InDesign file. You may be asked to relink the missing files. Relinking one to the scan/Links/ folder should relink all of other files (except those that do not exist.)
+
+## Suggestedd directory structure
+For `user-inputs.R` to work with the least amount of edits, imitate the following directory structure, using the same directory names:
+- `city-scans/`
+  - `01-current-scans/`
+    - *Directory for each current city, named in the yyyy-mm-country-city, pattern, cloned from GitHub (see above)*
+  - `02-past-scans/`
+    - *Directories from `01-current-scans/` after they have been completed*
+  - `03-multi-scan-materials/`
+    - `flood-archive/` *(Cloned from Github, see [Not in directory](#Not-in-directory) above)*
+    - `Koeppen-Geiger-ASCII.csv` *(Cloned from Github, see [Not in directory](#Not-in-directory) above)*
+    - `Oxford Global Cities Data.csv` *(internal only; request download)*
+    - `oxford-economic-areas.csv` *(Cloned from Github, see [Not in directory](#Not-in-directory) above)*
+    - `oxford-locations.csv` *(Cloned from Github, see [Not in directory](#Not-in-directory) above)*
+    - Photovoltaics directory *(Downloaded for each country, see [Not in directory](#Not-in-directory) above)*
+    - `undata-pop.csv` *(Cloned from Github, see [Not in directory](#Not-in-directory) above)*
 
 ## City Scan Checklist
 *This checklist is older than the process above; some steps might no longer be relevant or correct.*
