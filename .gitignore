@@ -1,10 +1,16 @@
 .DS_Store
+AOI
 scan/.DS_Store
 scan/Links/.DS_Store
 Maps/.DS_Store
 plots/.DS_Store
 scan/Links/map_*
-scan/Links/oxford_*
+scan/Links/oxford-*
+scan/Links/wsf-*
+scan/Links/world-pop-*
+scan/Links/darthmouth_flood_events.pdf
+scan/Links/monthly-pv.png
+scan/Links/ngdc-earthquake-events.pdf
 plots/*
 Stats/*
 Maps/*

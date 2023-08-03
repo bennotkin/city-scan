@@ -34,12 +34,12 @@ normalize <- function(x, na.rm = T) {
   return((x - min(x, na.rm = na.rm)) /(max(x, na.rm = na.rm)-min(x, na.rm = na.rm)))
 }
 
-# # Change the print type depending on whether document is run interactively or from `rmarkdown::render()`
-# # This is because a single function (such as `if(in_oxford)` can only print one result)
-# # from_render is defined in render-current-scans.R
-# # when rendering, must also set results to "asis" if ysing print_paged_df
-# interactive_run <- if (exists("from_render")) F else T
-# results_type <- if (!interactive_run) "asis" else "markup"
+# Change the print type depending on whether document is run interactively or from `rmarkdown::render()`
+# This is because a single function (such as `if(in_oxford)` can only print one result)
+# from_render is defined in render-current-scans.R
+# when rendering, must also set results to "asis" if ysing print_paged_df
+interactive_run <- if (exists("from_render")) F else T
+results_type <- if (!interactive_run) "asis" else "markup"
 
 print_paged_df <- function(...) {
   if (interactive_run) {
