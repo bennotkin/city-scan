@@ -8,7 +8,9 @@ output:
 # City Scan Calculations
 
 ## Set up
-```{r, echo = F, message = F}
+```{r, setup, echo = F, message = F}
+knitr::opts_chunk$set(echo = F, results = "asis")
+
 library(tidyr)
 library(ggplot2)
 library(forcats)
@@ -32,12 +34,12 @@ normalize <- function(x, na.rm = T) {
   return((x - min(x, na.rm = na.rm)) /(max(x, na.rm = na.rm)-min(x, na.rm = na.rm)))
 }
 
-# Change the print type depending on whether document is run interactively or from `rmarkdown::render()`
-# This is because a single function (such as `if(in_oxford)` can only print one result)
-# from_render is defined in render-current-scans.R
-# when rendering, must also set results to "asis" if ysing print_paged_df
-interactive_run <- if (exists("from_render")) F else T
-results_type <- if (exists("from_render")) "asis" else "markup"
+# # Change the print type depending on whether document is run interactively or from `rmarkdown::render()`
+# # This is because a single function (such as `if(in_oxford)` can only print one result)
+# # from_render is defined in render-current-scans.R
+# # when rendering, must also set results to "asis" if ysing print_paged_df
+# interactive_run <- if (exists("from_render")) F else T
+# results_type <- if (!interactive_run) "asis" else "markup"
 
 print_paged_df <- function(...) {
   if (interactive_run) {
@@ -52,7 +54,7 @@ print_text <- function(x) {
 }
 ```
 
-```{r, echo = F}
+```{r}
 if (!dir.exists("plots")) dir.create("plots") else message(paste("plots/ directory already exists in", getwd()))
 source("user-inputs.R")
 ```
@@ -62,7 +64,7 @@ title: "`r city` City Scan"
 ---
 
 ## Rename maps & make sure all are included
-```{r, echo = F}
+```{r}
 if (!any(str_detect(list.files("scan/Links"), "_admin.png"))) {
   list.files("Maps") %>%
     lapply(function(file) {
@@ -103,7 +105,7 @@ if (nrow(missing_maps) > 0) {
 
 Area and climate zone
 
-```{r, echo = F}
+```{r}
 # Basic Info (Area, Climate)
 # Area
 aoi <- read_sf("AOI") %>%
@@ -123,7 +125,7 @@ koeppen_city <- subset(koeppen, between(Lon, coords["Lon"] - .5, coords["Lon"] +
 print_text(paste("Köppen climate classification:", koeppen_city))
 ```
 
-```{r, echo = F}
+```{r}
 # Defining the UN Data and citypopulation.de pop function because it is used as backup in Oxford and in Density
 get_un_pop_growth <- function(city, country = country) {
   # UN Data
@@ -197,7 +199,7 @@ un_de_pop_growth <- function(city, country) {
 ### Select benchmark cities
 Benchmark cities are selected as cities that are in neighboring countries and having a population of 50% to 150% of the focus city's
 
-```{r, echo = F}
+```{r}
 # Read Data ----
 oxford_full <- read_csv(oxford_file, col_types = "cccccccccdddddddddddddddddddddddddddddddddddddddddcllldlcclcc")
 # competitive_cities <- read_xlsx("/Users/bennotkin/Documents/world-bank/crp/City Scan onboard material/competitive_cities_master_dataset_2000_2015.xlsx", sheet = "Data")
@@ -291,7 +293,7 @@ extra_inds <- c("Total population", "Employment - Total", "GDP, real, US$ - Tota
 ```
 
 ### Population Growth
-```{r, echo = F, results = "asis"}
+```{r}
 if (in_oxford) {
   pop_growth <- subset(oxford, Location == city & Indicator == "Total population") %>%
     select(Location, contains("20")) %>% # View()
@@ -380,7 +382,7 @@ pop_growth %>% mutate(growth_pct = (Population - lag(Population))/lag(Population
 ```
 
 ### Population Density
-```{r, echo = F}
+```{r}
 density <- subset(oxford, Indicator == "Total population") %>%
   mutate(Group, Location, Population = 1000 * `2021`, .keep = "none")
 
@@ -467,7 +469,7 @@ density %>% arrange(-Density)
 ### Population Distribution
 
 #### Population distribution by Oxford Economics
-```{r, echo = F, results = results_type}
+```{r}
 if (in_oxford) {
   pop_dist_long <- subset(oxford, Location %in% c(city, bm_cities) & Indicator %in% pop_dist_inds) %>%
     select(Location, Indicator, `2021`, Group) %>%
@@ -555,7 +557,7 @@ if (in_oxford) {
 
 Reproductive age is percentage of female population that is of reproductive age
 
-```{r, echo = F, results = results_type}
+```{r}
 # WorldPop Age Groups
 age_file <- list.files()[!is.na(str_match(list.files(), ".*age_distribution.csv"))]
 if (length(age_file) == 0) warning("No WorldPop age distribution file") else {
@@ -639,7 +641,7 @@ if (length(age_file) == 0) warning("No WorldPop age distribution file") else {
 
 Back to Oxford Economics
 
-```{r, echo = F, results = results_type}
+```{r}
 if (in_oxford) {
   # Using age groups 0-14, 15-64, 65+
   # https://databank.worldbank.org/metadataglossary/world-development-indicators/series/SP.POP.DPND.YG
@@ -696,7 +698,7 @@ if (in_oxford) {
 ```
 
 ### Share of GDP, Emp, Pop
-```{r, echo = F, results = results_type}
+```{r}
 if (in_oxford) {
   national_shares <- left_join(
     oxford %>% subset(Indicator %in% extra_inds) %>%
@@ -748,7 +750,7 @@ if (in_oxford) {
 ```
 
 ### GDP, Pop, Emp Growth
-```{r, echo = F, results = results_type}
+```{r}
 if (in_oxford) {
   pop_growth_years <- oxford %>% subset(Indicator == "Total population") %>%
     pivot_longer(cols = contains("20"), values_to = "Value", names_to = "Year") %>%
@@ -821,7 +823,7 @@ if (in_oxford) {
 ```
 
 
-```{r, echo = F, results = results_type}
+```{r}
 if (in_oxford) {
   pop_longitude <- oxford %>% subset(Indicator %in% extra_inds) %>%
     select(Group, Location, Country, Indicator, matches('\\d')) %>%
@@ -859,7 +861,7 @@ if (in_oxford) {
 ```
 
 
-```{r, echo = F, results = results_type}
+```{r}
 if (in_oxford) {
   # city_emp_growth <- subset(emp_growth, Location == city, select = `Employment Growth`) %>% pull()
   # ggplot(emp_growth) +
@@ -931,7 +933,7 @@ if (in_oxford) {
 }
 ```
 
-```{r, echo = F, results = results_type}
+```{r}
 if (in_oxford) {
   gdp_longitude <- oxford %>% subset(Indicator %in% extra_inds) %>%
     select(Group, Location, Country, Indicator, matches('\\d')) %>%
@@ -971,7 +973,7 @@ if (in_oxford) {
 ```
 
 ### GDP per capita
-```{r, echo = F, results = results_type}
+```{r}
 if (in_oxford) {
   gdppc <- oxford %>% subset(Indicator %in% extra_inds) %>%
     select(Group, Location, Country, Indicator, Value = `2021`) %>%
@@ -1035,7 +1037,7 @@ if (in_oxford) {
 ```
 
 ### Share of employment be sector
-```{r, echo = F, results = results_type}
+```{r}
 if (in_oxford) {
   emp_shares <- subset(oxford, Indicator %in% emp_inds) %>%
     subset(Indicator != "Employment - Total") %>% 
@@ -1119,7 +1121,7 @@ if (in_oxford) {
 ```
 
 
-```{r, echo = F}
+```{r}
 if (in_oxford) {
   print_text("Sectors by GVA")
   print_paged_df(gva_shares2)
@@ -1151,7 +1153,7 @@ if (in_oxford) {
 ```
 
 ### Economic Inequality
-```{r, echo = F, results = results_type}
+```{r}
 if (in_oxford) {
   # subset(oxford, !is.na(`Income Band`)) %>% select(`Income Band`) %>% unique() %>% subset(str_detect(`Income Band`, "PPP constant 20"))
   
@@ -1241,7 +1243,7 @@ if (in_oxford) {
 
 ## WSF
 ### Urban built-up area
-```{r, echo = F, results = results_type}
+```{r}
 if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
   # Urban built-up area ----
   wsf <- read_xlsx("Stats/WSF.xlsx", sheet = "WSF") %>%
@@ -1313,7 +1315,7 @@ if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
 ```
 
 ### Landcover
-```{r, echo = F}
+```{r}
 lc <- read_xlsx("Stats/Landcover.xlsx", skip = 1,
                 col_names = c("Land Cover", "Value", "Count", "Percent")) %>%
   # remove_missing(na.rm = T) %>%
@@ -1426,7 +1428,7 @@ print_text(paste0("The next largest land classes are ", lc2, " (", lc2_pct, "%) 
 ```
 
 ### Elevation
-```{r, echo = F}
+```{r}
 elevation <- read_xlsx("Stats/Elevaton_Slope.xlsx", sheet = "Elevation") 
 
 elevation2 <- elevation %>% subset(!is.na(legend)) %>%
@@ -1508,7 +1510,7 @@ ggsave("plots/wsf-elevation-pieplot.png", device = "png",
 ```
 
 ### Slope
-```{r, echo = F}
+```{r}
 slope <- read_xlsx("Stats/Elevaton_Slope.xlsx", sheet = "Slope") 
 
 slope2 <- slope %>% subset(!is.na(legend)) %>%
@@ -1531,7 +1533,7 @@ ggsave("plots/wsf-slope-pieplot.png", device = "png",
 ```
 
 ## Urban Flooding
-```{r, echo = F}
+```{r}
 flood_string <- function(flood_type) {
   osmpt <- read_xls(paste0("Stats/", flood_type, "_osmpt.xls"))[,1:4] %>% distinct()
   major_roads <- read_xls(paste0("Stats/", flood_type, "_majorroad.xls")) %>% tryCatch(error = function(e) return(data.frame(OID = 0, gridcode = 0, LENGTH = 0, PERCENTAGE = 0)))
@@ -1581,7 +1583,7 @@ flood_pop_area <- function(flood_type) {
 ```
 
 ### Fluvial
-```{r, echo = F, results = results_type}
+```{r}
 if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
   fu <- gather_flood_data("fu")
   
@@ -1622,7 +1624,7 @@ print_text(flood_string("fu"))
 ```
 
 ### Pluvial
-```{r, echo = F}
+```{r}
 if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
   pu <- gather_flood_data("pu")
   pu_plot <- pu %>%
@@ -1665,7 +1667,7 @@ print_text(flood_string("pu"))
 ```
 
 ### Combined Fluvial & Pluvial
-```{r, echo = F}
+```{r}
 if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
   pufu <- gather_flood_data("comb")
   pufu <- bind_rows(
@@ -1717,7 +1719,7 @@ print_text(flood_string("comb"))
 ```
 
 ## Flood Events
-```{r, echo = F}
+```{r}
 flood_archive <- read_sf(flood_archive_file)
 aoi <- read_sf("AOI") %>% st_transform("EPSG:4326")
 
@@ -1803,7 +1805,7 @@ ggsave("plots/darthmouth_flood_events.pdf", device = "pdf",
 ```
 
 ## Earthquakes
-```{r, echo = F}
+```{r}
 get_earthquake_data <- function() {
   library(httr)
   url <- "http://www.ngdc.noaa.gov/hazel/hazard-service/api/v1/earthquakes"
@@ -1929,7 +1931,7 @@ eq_text %>% filter(units::drop_units(distance) < 500)
 ```
 
 # Photovoltaic Potential (PV)
-```{r, echo = F}
+```{r}
 files <- list.files(pv_path) %>% 
   subset(stringr::str_detect(., ".tif$"))
 
@@ -1971,7 +1973,7 @@ ggsave("plots/monthly-pv.png", device = "png",
 ```
 
 ## Plots Check
-```{r, echo = F, results = results_type}
+```{r}
 # This checks which maps are missing. I could do the same for plots, but would need to be at end of document
 slide_list <- read_csv("slide-list.csv", col_types = "cccddcc")
 plots <- list.files("plots")
