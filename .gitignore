@@ -5,3 +5,6 @@ Maps/.DS_Store
 plots/.DS_Store
 scan/Links/map_*
 scan/Links/oxford_*
+plots/*
+Stats/*
+Maps/*
