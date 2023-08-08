@@ -40,4 +40,4 @@ undata_file <- "../../03-multi-scan-materials/undata-pop.csv"
 koeppen_file <- "../../03-multi-scan-materials/Koeppen-Geiger-ASCII.csv"
 
 # Flood Archive
-flood_archive_file <- "~/Documents/world-bank/crp/city-scans/03-multi-scan-materials/flood-archive"
+flood_archive_file <- "../../03-multi-scan-materials/flood-archive"

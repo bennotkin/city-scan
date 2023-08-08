@@ -1,14 +1,10 @@
 ---
 output:
   html_notebook: default
-  pdf_document:
-    latex_engine: xelatex
 ---
 
-# City Scan Calculations
-
-## Set up
-```{r, setup, echo = F, message = F}
+## Setup
+```{r, echo = F, message = F}
 knitr::opts_chunk$set(echo = F, results = "asis")
 
 library(tidyr)
@@ -49,21 +45,33 @@ print_paged_df <- function(...) {
   }
 }
 
-print_text <- function(x) {
-  cat(paste0(x, "\n<br><br>\n"))
+print_text <- function(x, linebreaks = 2) {
+  cat(paste0(x, "\n", paste(rep("<br>", linebreaks), collapse = ""), "\n"))
 }
 ```
 
-```{r}
-if (!dir.exists("plots")) dir.create("plots") else message(paste("plots/ directory already exists in", getwd()))
+```{r, echo = F}
+# This chunk is separate from the setup chunk above because we don't want
+# the message suppressed 
+if (!dir.exists("plots")) dir.create("plots") else {
+  message(paste("plots/ directory already exists in", getwd()))
+}
+```
+
+### User Input Variables
+```{r, echo = F}
 source("user-inputs.R")
+print_text(paste("City:", city), 1)
+print_text(paste("Country:", country), 1)
+print_text(paste("Manual benchmark cities:", paste_and(bm_cities_manual)), 1)
+print_text(paste("In Oxford:", in_oxford), 1)
 ```
 
 ---
 title: "`r city` City Scan"
 ---
 
-## Rename maps & make sure all are included
+### Rename maps & make sure all are included
 ```{r}
 if (!any(str_detect(list.files("scan/Links"), "_admin.png"))) {
   list.files("Maps") %>%
@@ -74,7 +82,7 @@ if (!any(str_detect(list.files("scan/Links"), "_admin.png"))) {
 
 rename_command <- paste0("Rscript --vanilla rename-generic.R '", getwd(), "/scan/Links' ", map_file_prefices)
 for (x in rename_command) system(x)
-system(paste0("magick ", getwd(), "/scan/Links/map_network_plot.png -trim -fuzz 30% -fill white -opaque '#111111' ", getwd(), "/scan/Links/map_network_plot_white.png"))
+# system(paste0("magick ", getwd(), "/scan/Links/map_network_plot.png -trim -fuzz 30% -fill white -opaque '#111111' ", getwd(), "/scan/Links/map_network_plot_white.png"))
 
 # This checks which maps are missing. I could do the same for plots, but would need to be at end of document
 slide_list <- read_csv("slide-list.csv", col_types = "cccddcc")
@@ -103,7 +111,7 @@ if (nrow(missing_maps) > 0) {
 }
 ```
 
-Area and climate zone
+## Area and climate zone
 
 ```{r}
 # Basic Info (Area, Climate)
@@ -122,7 +130,7 @@ koeppen_city <- subset(koeppen, between(Lon, coords["Lon"] - .5, coords["Lon"] +
                          between(Lat, coords["Lat"] - .5, coords["Lat"] + .5)) %>%
   .$Cls %>% unique()
 # Find class here: https://en.wikipedia.org/wiki/Köppen_climate_classification
-print_text(paste("Köppen climate classification:", koeppen_city))
+print_text(paste("Köppen climate classification:", koeppen_city, "(See https://en.wikipedia.org/wiki/Köppen_climate_classification for classes)"))
 ```
 
 ```{r}
@@ -180,8 +188,8 @@ get_de_pop_growth <- function(city, country = country) {
       .keep = "unused") %>%
     arrange(Year)
   
-  if (nrow(pop_growth_de) == 0) warning("No population data detected in citypopulation.de table")
-  if (length(unique(pop_growth_de$Location)) > 1) warning("More than one city name in citypopulation.de table")
+  if (nrow(pop_growth_de) == 0) warning("No population data detected in citypopulation.de table<br><br>")
+  if (length(unique(pop_growth_de$Location)) > 1) warning("More than one city name in citypopulation.de table\n")
   
   return(pop_growth_de)
 }
@@ -195,7 +203,8 @@ un_de_pop_growth <- function(city, country) {
 }
 ```
 
-## Oxford
+`r if (in_oxford) "## Oxford" else "## Demographics"`
+
 ### Select benchmark cities
 Benchmark cities are selected as cities that are in neighboring countries and having a population of 50% to 150% of the focus city's
 
@@ -204,7 +213,9 @@ Benchmark cities are selected as cities that are in neighboring countries and ha
 oxford_full <- read_csv(oxford_file, col_types = "cccccccccdddddddddddddddddddddddddddddddddddddddddcllldlcclcc")
 # competitive_cities <- read_xlsx("/Users/bennotkin/Documents/world-bank/crp/City Scan onboard material/competitive_cities_master_dataset_2000_2015.xlsx", sheet = "Data")
 
-pop <- subset(oxford_full, Location == city & Indicator == "Total population", select = `2021`) %>% pull()
+pop <- oxford_full %>%
+  subset(Location == city & Indicator == "Total population", select = `2021`) %>%
+  pull()
 if (length(pop) > 0) {
   print_text(paste("pop:", scales::label_comma()(pop * 1000)))
 } else {
@@ -312,12 +323,13 @@ if (in_oxford) {
     filter(Source == larger_source) %>%
     arrange(Year)
   if (nrow(pop_growth) == 0) {
-    warning("No population data from UN or citypopulation.de")
+    warning("No population data from UN or citypopulation.de. Reading from manual-data-entry/pop.csv")
     
     # Other data source, manually downloaded/created
-    pop_growth <- read_xlsx("PATH.xlsx", sheet = 1) %>%
+    pop_growth <- read_csv("manual-data-entry/pop.csv", col_types = "c") %>%
+      mutate(Year = as.numeric(Year), Population = as.numeric(Population)) %>%
       # mutate(Source = "Turkish Stastistical Institute") %>%
-      subset(City == city & !is.na(Population)) %>% arrange(Year)
+      subset(Location == city & !is.na(Population)) %>% arrange(Year)
     
     # If we want to display multiple sources
     # pop_growth <- bind_rows(pop_growth_1, pop_growth_2)
@@ -425,6 +437,10 @@ non_oxford_density <- non_oxford_pop %>% group_by(Location) %>%
 
 if (nrow(non_oxford_density) > 0) density <- bind_rows(density, non_oxford_density)
 
+density_manual <- read_csv("manual-data-entry/density.csv", col_types = "ccdcd") 
+density <- bind_rows(density, density_manual) %>%
+  slice_tail(n = 1, by = Location)
+
 density$Density <- density$Population/density$Area_km
 density <- density %>% arrange(desc(Density))
 
@@ -469,6 +485,8 @@ density %>% arrange(-Density)
 ### Population Distribution
 
 #### Population distribution by Oxford Economics
+`r if (!in_oxford) "_Only included if city is in Oxford Economics database. City is not._"`
+
 ```{r}
 if (in_oxford) {
   pop_dist_long <- subset(oxford, Location %in% c(city, bm_cities) & Indicator %in% pop_dist_inds) %>%
@@ -637,9 +655,9 @@ if (length(age_file) == 0) warning("No WorldPop age distribution file") else {
 }
 ```
 
-### Age structure
+`r if (in_oxford) "### Age structure"`
 
-Back to Oxford Economics
+`r if (in_oxford) "Back to Oxford Economics"`
 
 ```{r}
 if (in_oxford) {
@@ -698,6 +716,7 @@ if (in_oxford) {
 ```
 
 ### Share of GDP, Emp, Pop
+`r if (!in_oxford) "_Only included if city is in Oxford Economics database. City is not._"`
 ```{r}
 if (in_oxford) {
   national_shares <- left_join(
@@ -750,6 +769,7 @@ if (in_oxford) {
 ```
 
 ### GDP, Pop, Emp Growth
+`r if (!in_oxford) "_Only included if city is in Oxford Economics database. City is not._"`
 ```{r}
 if (in_oxford) {
   pop_growth_years <- oxford %>% subset(Indicator == "Total population") %>%
@@ -973,6 +993,7 @@ if (in_oxford) {
 ```
 
 ### GDP per capita
+`r if (!in_oxford) "_Only included if city is in Oxford Economics database. City is not._"`
 ```{r}
 if (in_oxford) {
   gdppc <- oxford %>% subset(Indicator %in% extra_inds) %>%
@@ -1037,6 +1058,7 @@ if (in_oxford) {
 ```
 
 ### Share of employment be sector
+`r if (!in_oxford) "_Only included if city is in Oxford Economics database. City is not._"`
 ```{r}
 if (in_oxford) {
   emp_shares <- subset(oxford, Indicator %in% emp_inds) %>%
@@ -1153,6 +1175,7 @@ if (in_oxford) {
 ```
 
 ### Economic Inequality
+`r if (!in_oxford) "_Only included if city is in Oxford Economics database. City is not._"`
 ```{r}
 if (in_oxford) {
   # subset(oxford, !is.na(`Income Band`)) %>% select(`Income Band`) %>% unique() %>% subset(str_detect(`Income Band`, "PPP constant 20"))
@@ -1244,7 +1267,9 @@ if (in_oxford) {
 ## WSF
 ### Urban built-up area
 ```{r}
-if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
+if (!file.exists("Stats/WSF.xlsx")) {
+  warning("No WSF.xlsx file. Should there be? Check for different file name.")
+} else {
   # Urban built-up area ----
   wsf <- read_xlsx("Stats/WSF.xlsx", sheet = "WSF") %>%
     rename(Year = 1) %>%

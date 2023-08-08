@@ -4,7 +4,7 @@ map,map_admin.png,Basic City Information,2,1,all,Check if map name includes 'AOI
 plot,oxford-pop-density-scatter.png,Population Growth & Density,3,1,all,
 plot,oxford-pop-growth.png,Population Growth & Density,3,1,all,
 plot,oxford-age-structure-area.png,Population Distribution by Age,3,2,oxford,Check if city is in Oxford Economics dataset
-plot,oxford-pop-distro.png,Population Distribution by Age,3,2,all,May come from Oxford of WorldPop
+plot,oxford-pop-distro.png,Population Distribution by Age,3,2,oxford,May come from Oxford of WorldPop
 plot,world-pop-age-sex.png,Population Distribution by Age & Sex,3,3,all,
 map,map_POP.png,Population Density,3,4,all,
 map,map_rwi.png,Relative Wealth Index,3,6,all,

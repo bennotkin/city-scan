@@ -50,10 +50,17 @@ A couple datasets are not included in the repo
       - `*_network_plus_building_footprints.png`
    5. `toms_outputs/*_age_distribution.csv` (may be located in demographics/ folder; place in the main directory)
 2. Edit variables in `user-inputs.R`, including paths to locally downloaded files
-3. Run `city-scan-calculations.Rmd`
-4. Make any necessary legibility edits to `darthmouth_flood_events.pdf` and `ngdc-earthquake-events.pdf`
-5. Copy all files in `plots/` into `scan/Links/`
-6. Open the InDesign file. You may be asked to relink the missing files. Relinking one to the scan/Links/ folder should relink all of other files (except those that do not exist.)
+3. Ensure relevant `Stats/` files are named as in the R code
+   1. `WSF.xlsx`
+	 1. `Landcover.xlsx`
+	 2. `Elevaton_Slope.xlsx`
+	 3. `*_osmpt.xls` (where `*` is `fu`, `pu` and `comb`)
+	 4. `*_major_roads.xls`
+	 5. `*_pop_area.xls`
+4. Run `city-scan-calculations.Rmd`
+5. Make any necessary legibility edits to `darthmouth_flood_events.pdf` and `ngdc-earthquake-events.pdf`
+6. Copy all files in `plots/` into `scan/Links/`
+7. Open the InDesign file. You may be asked to relink the missing files. Relinking one to the scan/Links/ folder should relink all of other files (except those that do not exist.)
 
 ## Suggestedd directory structure
 For `user-inputs.R` to work with the least amount of edits, imitate the following directory structure, using the same directory names:
