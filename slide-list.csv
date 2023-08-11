@@ -23,7 +23,7 @@ plot,wsf-uba-plot.png,Urban Extent and Change,5,1,all,
 map,map_Impervious.png,Built-up Density,5,2,occasional,Imperviousness is often excluded
 map,map_LC.png,Land Cover,5,3,all,
 plot,wsf-lc-pieplot.png,Land Cover,5,3,all,
-map,map_network_plot_white.png,Road Network Layout and Orientation,5,4,all,
+map,map_network_plot.png,Road Network Layout and Orientation,5,4,all,
 map,map_radar_plot.png,Road Network Layout and Orientation,5,4,all,
 map,map_intersection.png,Intersection Density,5,5,all,
 map,map_school.png,Access to Schools,5,6,all,

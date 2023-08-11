@@ -53,9 +53,20 @@ print_text <- function(x, linebreaks = 2) {
 ```{r, echo = F}
 # This chunk is separate from the setup chunk above because we don't want
 # the message suppressed 
-if (!dir.exists("plots")) dir.create("plots") else {
-  message(paste("plots/ directory already exists in", getwd()))
+
+c("plots", "data-sharing", "data-sharing/02-TIFs",
+  "data-sharing/03-analysis-inputs", "data-sharing/03-analysis-inputs/flood-events", 
+  "data-sharing/03-analysis-inputs/earthquakes", "data-sharing/04-tabular-data") %>%
+  lapply(function(directory) {
+    if (!dir.exists(directory)) dir.create(directory) else {
+      message(paste0(directory, "/ directory already exists in ", getwd()))
 }
+  })
+
+file.copy(from = "AOI/", to = "data-sharing", recursive = T)
+file.rename("data-sharing/AOI", "data-sharing/01-AOI")
+
+message("To fill data-sharing/02-TIFs and data-sharing/03-analysis-inputs you will need to download and rename files from city_scan2. This is not yet a necessary step for all cities.")
 ```
 
 ### User Input Variables
@@ -329,7 +340,8 @@ if (in_oxford) {
     pop_growth <- read_csv("manual-data-entry/pop.csv", col_types = "c") %>%
       mutate(Year = as.numeric(Year), Population = as.numeric(Population)) %>%
       # mutate(Source = "Turkish Stastistical Institute") %>%
-      subset(Location == city & !is.na(Population)) %>% arrange(Year)
+      # subset(Location == city & !is.na(Population)) %>% arrange(Year)
+      remove_missing()
     
     # If we want to display multiple sources
     # pop_growth <- bind_rows(pop_growth_1, pop_growth_2)
@@ -338,6 +350,10 @@ if (in_oxford) {
   }
 }
 
+# Write pop_growth to data-sharing
+write_csv(pop_growth, "data-sharing/04-tabular-data/population-growth.csv")
+
+# Make pop_growth plot
 pop_min_year <- min(pop_growth$Year)
 pop_max_year <- max(pop_growth$Year)
 
@@ -1274,7 +1290,7 @@ if (!file.exists("Stats/WSF.xlsx")) {
   wsf <- read_xlsx("Stats/WSF.xlsx", sheet = "WSF") %>%
     rename(Year = 1) %>%
     select(Year, uba_km2 = any_of(c("AREA_sq_km", "cumulative sq km"))) %>%
-    mutate(growth = (uba_km2 / lag(uba_km2) - 1), growth_km2 = uba_km2 - lag(uba_km2))
+    mutate(growth_pct = (uba_km2 / lag(uba_km2) - 1), growth_km2 = uba_km2 - lag(uba_km2))
   uba_plot <- wsf %>%
     ggplot +
     geom_line(aes(x = Year, y = uba_km2)) +
@@ -1298,6 +1314,7 @@ if (!file.exists("Stats/WSF.xlsx")) {
   print_text(paste0("The city's built-up area grew from ", round(first_area, 2), " km^2 in ", first_year, " to ", round(latest_area, 2), " in ", latest_year, " for ", round(pct_growth, 2), "% growth"))
   
   print_paged_df(wsf)
+  write_csv(wsf, "data-sharing/04-tabular-data/urban-extent-and-change.csv")
   # mean(head(wsf$growth, 10), na.rm = T)
   # mean(head(wsf$growth_km2, 10), na.rm = T)
   # 
@@ -1560,31 +1577,36 @@ ggsave("plots/wsf-slope-pieplot.png", device = "png",
 ## Urban Flooding
 ```{r}
 flood_string <- function(flood_type) {
-  osmpt <- read_xls(paste0("Stats/", flood_type, "_osmpt.xls"))[,1:4] %>% distinct()
+  osmpt <- read_xls(paste0("Stats/", flood_type, "_osmpt.xls"))[,1:4] %>% distinct() %>%
+    tryCatch(error = function(e) {
+      warning(paste0("File `Stats/", flood_type, "_osmpt.xls does not exist. Is it named differently?<br><br>"))
+      return(NULL)
+    })
   major_roads <- read_xls(paste0("Stats/", flood_type, "_majorroad.xls")) %>% tryCatch(error = function(e) return(data.frame(OID = 0, gridcode = 0, LENGTH = 0, PERCENTAGE = 0)))
   
-  roads_pct <- major_roads$PERCENTAGE[major_roads$gridcode == 1] %>% round(0)
-  police_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_police" & osmpt$gridcode == 1]
-  police_ct_nf <- osmpt$PNT_COUNT[osmpt$source == "osm_police" & osmpt$gridcode == 0] + police_ct
-  health_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_health" & osmpt$gridcode == 1]
-  health_ct_nf <- osmpt$PNT_COUNT[osmpt$source == "osm_health" & osmpt$gridcode == 0] + health_ct
-  school_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_schools" & osmpt$gridcode == 1]
-  school_ct_nf <- osmpt$PNT_COUNT[osmpt$source == "osm_schools" & osmpt$gridcode == 0] + school_ct
-  fire_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_fire" & osmpt$gridcode == 1]
-  fire_ct_nf <- osmpt$PNT_COUNT[osmpt$source == "osm_fire" & osmpt$gridcode == 0] + fire_ct
-  
-  flood_type_long <- if (flood_type == "fu") "riverine" else if (flood_type == "pu") "surface water" else "riverine or surface water"
-  
-  string <- paste0(
-    roads_pct, "%", " of major roads, ", 
-    school_ct, " of ", school_ct_nf, " schools, ", 
-    health_ct, " of ", health_ct_nf, " health facilities, ", 
-    fire_ct, " of ", fire_ct_nf, " fire stations, and ", 
-    police_ct, " of ", police_ct_nf, " police stations are located in a ", 
-    flood_type_long, " flood risk zone with a minimum depth of 15 cm")
-  
-  # string <- vstring("%%roads_pct%, "of major roads,", school_ct, "of", school_ct_nf, "schools,", health_ct, "of", health_ct_nf, "health facilities,", fire_ct, "of", fire_ct_nf, "fire stations, and", police_ct, "of", police_ct_nf, "police stations are located in a", flood_type_long, "flood risk zone with a minimum depth of 15 cm")
-  return(string)
+  if (is.null(osmpt)) return("No OSMPT data.") else {
+    roads_pct <- major_roads$PERCENTAGE[major_roads$gridcode == 1] %>% round(0)
+    police_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_police" & osmpt$gridcode == 1]
+    police_ct_nf <- osmpt$PNT_COUNT[osmpt$source == "osm_police" & osmpt$gridcode == 0] + police_ct
+    health_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_health" & osmpt$gridcode == 1]
+    health_ct_nf <- osmpt$PNT_COUNT[osmpt$source == "osm_health" & osmpt$gridcode == 0] + health_ct
+    school_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_schools" & osmpt$gridcode == 1]
+    school_ct_nf <- osmpt$PNT_COUNT[osmpt$source == "osm_schools" & osmpt$gridcode == 0] + school_ct
+    fire_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_fire" & osmpt$gridcode == 1]
+    fire_ct_nf <- osmpt$PNT_COUNT[osmpt$source == "osm_fire" & osmpt$gridcode == 0] + fire_ct
+    
+    flood_type_long <- if (flood_type == "fu") "riverine" else if (flood_type == "pu") "surface water" else "riverine or surface water"
+    
+    string <- paste0(
+      roads_pct, "%", " of major roads, ", 
+      school_ct, " of ", school_ct_nf, " schools, ", 
+      health_ct, " of ", health_ct_nf, " health facilities, ", 
+      fire_ct, " of ", fire_ct_nf, " fire stations, and ", 
+      police_ct, " of ", police_ct_nf, " police stations are located in a ", 
+      flood_type_long, " flood risk zone with a minimum depth of 15 cm")
+
+    return(string)
+  }
 }
 
 gather_flood_data <- function(flood_type) {
@@ -1827,6 +1849,8 @@ ggplot(flood_text) +
   force_panelsizes(rows = unit(5.833, "in"), cols = unit(20, "in"))
 ggsave("plots/darthmouth_flood_events.pdf", device = "pdf",
        width = 20, height = 5.833, units = "in", dpi = "print")
+
+st_write(flood_archive, "data-sharing/03-analysis-inputs/flood-events/flood-events.shp")
 ```
 
 ## Earthquakes
@@ -1869,7 +1893,7 @@ y_ratio <- 51498 / 13514
 aoi <- read_sf("AOI") %>% st_transform("EPSG:4326")
 city_point <- aoi %>% st_centroid()
 
-eq_text <- eq %>%
+eq_near <- eq %>%
   subset(!is.na(latitude)) %>%
   st_as_sf(coords = c("longitude", "latitude"), crs = st_crs(city_point)) %>%
   mutate(distance = st_distance(geometry, city_point) %>% units::set_units(km),
@@ -1880,7 +1904,8 @@ eq_text <- eq %>%
        eqMagnitude >= 7.5 |
        intensity >= 10 |
        !is.na(tsunamiEventId)) &
-      distance < units::set_units(1000, km)) %>%
+      distance < units::set_units(500, km))
+eq_text <- eq_near %>%
   mutate(
     location = gsub("([\\s-][A-Z])([A-Z]*)", "\\1\\L\\2", locationName, perl = T) %>% str_extract("[^:][\\s]+.*") %>% trimws(),
     fatalities = paste(scales::label_comma()(deaths), "fatalities"),
@@ -1941,6 +1966,7 @@ ggplot(eq_text) +
   force_panelsizes(rows = unit(5.833, "in"), cols = unit(20, "in"))
 ggsave("plots/ngdc-earthquake-events.pdf", device = "pdf",
        width = 20, height = 5.833, units = "in", dpi = "print")
+st_write(eq_near, "data-sharing/03-analysis-inputs/earthquakes/earthquakes-1000km.shp")
 
 # bind_cols(eq_text, eq_text$geometry %>% st_coordinates()) %>%
 #   bind_cols(distance = st_distance(city_point, eq_text) %>% as.vector()) %>%
@@ -1953,6 +1979,13 @@ ggsave("plots/ngdc-earthquake-events.pdf", device = "pdf",
 #   theme(legend.position = "none") +
 #   geom_point(data = slice_max(eq_text, magXdist, n = 15), aes(x = distance, y = eqMagnitude), color = "gold")
 eq_text %>% filter(units::drop_units(distance) < 500)
+
+print_paged_df(eq_text_select)
+
+eq_text %>% sf::st_drop_geometry() %>%
+  mutate(distance_round = ceiling(distance/100) * 100) %>%
+  count(distance_round) %>% arrange(distance_round) %>%
+  mutate(cumsum = cumsum(n)) %>% print_paged_df()
 ```
 
 # Photovoltaic Potential (PV)
