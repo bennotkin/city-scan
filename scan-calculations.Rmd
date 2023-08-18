@@ -1614,7 +1614,7 @@ gather_flood_data <- function(flood_type) {
     select(Year = Value, uba_km2 = AREA_sq_km) %>%
     mutate(growth = (uba_km2 / lag(uba_km2) - 1))
   df <- left_join(df, wsf, by = "Year", suffix = c("", "_wsf")) %>%
-    select(-growth_wsf, -growth_km2) %>%
+    select(-growth_pct, -growth_km2) %>%
     mutate(percent_uba = uba_km2/uba_km2_wsf)
   return(df)
 }
