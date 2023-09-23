@@ -59,12 +59,14 @@ c("plots", "data-sharing", "data-sharing/02-TIFs",
   "data-sharing/03-analysis-inputs/earthquakes", "data-sharing/04-tabular-data") %>%
   lapply(function(directory) {
     if (!dir.exists(directory)) dir.create(directory) else {
-      message(paste0(directory, "/ directory already exists in ", getwd()))
+      # message(paste0(directory, "/ directory already exists in ", getwd()))
 }
-  })
+  }) %>% invisible()
 
+if (!dir.exists("data-sharing/AOI")) {
 file.copy(from = "AOI/", to = "data-sharing", recursive = T)
 file.rename("data-sharing/AOI", "data-sharing/01-AOI")
+}
 
 message("To fill data-sharing/02-TIFs and data-sharing/03-analysis-inputs you will need to download and rename files from city_scan2. This is not yet a necessary step for all cities.")
 ```
@@ -88,7 +90,7 @@ if (!any(str_detect(list.files("scan/Links"), "_admin.png"))) {
   list.files("Maps") %>%
     lapply(function(file) {
       file.copy(paste0("Maps/", file), "scan/Links")
-    })
+    }) %>% invisible()
 }
 
 rename_command <- paste0("Rscript --vanilla rename-generic.R '", getwd(), "/scan/Links' ", map_file_prefices)
@@ -360,7 +362,9 @@ pop_max_year <- max(pop_growth$Year)
 pop_growth_plot <- ggplot(pop_growth, aes(x = Year, y = Population)) + #, color = Source))
   geom_line() +
   geom_point() +  
-  scale_x_continuous(minor_breaks = seq(pop_min_year, pop_max_year, 1)) + 
+  scale_x_continuous(
+    breaks = if (pop_max_year - pop_min_year > 15) seq(1900,2025, by = 5) else seq(1900, 2025, by = 2),
+    minor_breaks = seq(pop_min_year, pop_max_year, 1)) + 
   scale_y_continuous(limits = c(0, max(pop_growth$Population)), labels = scales::comma, expand = expansion(c(0, .1))) +    
   #   scale_color_manual(values = hues) +
   theme_minimal() +
@@ -385,9 +389,9 @@ avg_growth <- (1 + pct_growth)^(1/(year_last - year_1)) - 1
 paste0(
   city,
   "'s population increased by ", 
-  scales::label_percent()(pct_growth),
-  " from ", scales::label_comma()(pop_1), " in ", year_1, " to ", scales::label_comma()(pop_last), " in ", year_last,
-  ", at an average annual rate of ", scales::label_percent(accuracy = 0.1)(avg_growth)) %>%
+  scales::percent(pct_growth, big.mark = ","),
+  " from ", scales::label_comma()(pop_1), " in ", year_1, " to ", scales::comma(pop_last), " in ", year_last,
+  ", at an average annual rate of ", scales::percent(avg_growth, accuracy = 0.1)) %>%
   print_text()
 
 # Print pop growth tables (OUTPUT)
@@ -1297,7 +1301,7 @@ if (!file.exists("Stats/WSF.xlsx")) {
     scale_x_continuous(
       breaks = seq(1985, 2020, 5),
       minor_breaks = seq(1985, 2021, 1)) + 
-    scale_y_continuous(labels = scales::comma, limits = c(0, max(wsf$uba_km2))) +
+    scale_y_continuous(labels = scales::comma, limits = c(0, max(wsf$uba_km2)), expand = c(0, NA)) +
     theme_minimal() +
     labs(title = "",#paste(city, "Urban Built-up Area, 1985-2015"),
          y = bquote('Urban built-up area,'~km^2)) +
@@ -1586,23 +1590,23 @@ flood_string <- function(flood_type) {
   
   if (is.null(osmpt)) return("No OSMPT data.") else {
     roads_pct <- major_roads$PERCENTAGE[major_roads$gridcode == 1] %>% round(0)
-    police_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_police" & osmpt$gridcode == 1]
-    police_ct_nf <- osmpt$PNT_COUNT[osmpt$source == "osm_police" & osmpt$gridcode == 0] + police_ct
-    health_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_health" & osmpt$gridcode == 1]
-    health_ct_nf <- osmpt$PNT_COUNT[osmpt$source == "osm_health" & osmpt$gridcode == 0] + health_ct
-    school_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_schools" & osmpt$gridcode == 1]
-    school_ct_nf <- osmpt$PNT_COUNT[osmpt$source == "osm_schools" & osmpt$gridcode == 0] + school_ct
-    fire_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_fire" & osmpt$gridcode == 1]
-    fire_ct_nf <- osmpt$PNT_COUNT[osmpt$source == "osm_fire" & osmpt$gridcode == 0] + fire_ct
+    police_ct_flood <- osmpt$PNT_COUNT[osmpt$source == "osm_police" & osmpt$gridcode == 1]
+    police_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_police" & osmpt$gridcode == 0]
+    health_ct_flood <- osmpt$PNT_COUNT[osmpt$source == "osm_health" & osmpt$gridcode == 1]
+    health_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_health" & osmpt$gridcode == 0]
+    school_ct_flood <- osmpt$PNT_COUNT[osmpt$source == "osm_schools" & osmpt$gridcode == 1]
+    school_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_schools" & osmpt$gridcode == 0]
+    fire_ct_flood <- osmpt$PNT_COUNT[osmpt$source == "osm_fire" & osmpt$gridcode == 1]
+    fire_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_fire" & osmpt$gridcode == 0]
     
     flood_type_long <- if (flood_type == "fu") "riverine" else if (flood_type == "pu") "surface water" else "riverine or surface water"
     
     string <- paste0(
       roads_pct, "%", " of major roads, ", 
-      school_ct, " of ", school_ct_nf, " schools, ", 
-      health_ct, " of ", health_ct_nf, " health facilities, ", 
-      fire_ct, " of ", fire_ct_nf, " fire stations, and ", 
-      police_ct, " of ", police_ct_nf, " police stations are located in a ", 
+      school_ct_flood, " of ", school_ct, " schools, ", 
+      health_ct_flood, " of ", health_ct, " health facilities, ", 
+      fire_ct_flood, " of ", fire_ct, " fire stations, and ", 
+      police_ct_flood, " of ", police_ct, " police stations are located in a ", 
       flood_type_long, " flood risk zone with a minimum depth of 15 cm")
 
     return(string)
@@ -1622,8 +1626,10 @@ flood_pop_area <- function(flood_type) {
   read_xls(paste0("Stats/", flood_type, "_pop_area.xls")) %>% 
     arrange(VALUE) %>% 
     rename(Area = VALUE_1) %>%
-    mutate(Total_Pop_Area = sum(Area),
-           Percentage = Area/Total_Pop_Area) %>%
+    # {.$Area[2] / .$Area[1]}
+    mutate(Total_Pop_Area = max(Area),
+           Percentage = Area/Total_Pop_Area,
+           Percentage = scales::percent(Percentage, accuracy = 0.01)) %>%
     filter(VALUE == 1) %>%
     rename(Flood_Pop_Area = Area) 
 }
@@ -1664,8 +1670,8 @@ if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
   
   # print_paged_df(fu)
   print_paged_df(bind_rows(head(fu, 1), tail(fu, 1)))
-  print_text(paste("In", fu[1,1], ",", round(fu[1,2], 2), "km^2 of the built-up area was exposed to river flooding at a minimum depth of 15 cm"))
-  print_text(paste("Percentage of highest populated area exposed to fluvial flooding:", flood_pop_area("fu")$Percentage %>% scales::percent()))
+  print_text(paste0("In ", fu[1,1], ", ", round(fu[1,2], 2), " km^2 of the built-up area was exposed to river flooding at a minimum depth of 15 cm"))
+  print_text(paste("Percentage of highest populated area exposed to fluvial flooding:", flood_pop_area("fu")$Percentage))
 }
 print_text(flood_string("fu"))
 ```
@@ -1705,8 +1711,8 @@ if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
   
   # print_paged_df(pu)
   print_paged_df(bind_rows(head(pu, 1), tail(pu, 1)))
-  print_text(paste("In", pu[1,1], ",", round(pu[1,2], 2), "km^2 of the built-up area was exposed to surface water flooding at a minimum depth of 15 cm"))
-  print_text(paste("Percentage of highest populated area exposed to pluvial flooding:", flood_pop_area("pu")$Percentage %>% scales::percent()))
+  print_text(paste0("In ", pu[1,1], ", ", round(pu[1,2], 2), " km^2 of the built-up area was exposed to surface water flooding at a minimum depth of 15 cm"))
+  print_text(paste("Percentage of highest populated area exposed to pluvial flooding:", flood_pop_area("pu")$Percentage))
   
   # pu %>% mutate(diff = pu$uba_km2 - lag(pu$uba_km2)) %>% .$diff %>% mean(na.rm = T) 
 }
@@ -1759,14 +1765,21 @@ if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
   comb <- subset(pufu, type == "Combined")
   # comb %>% mutate(diff = comb$uba_km2 - lag(comb$uba_km2)) %>% .$diff %>% mean(na.rm = T) 
   print_paged_df(bind_rows(head(comb, 1), tail(comb, 1)))
-  print_text(paste("In", comb[1,1], ",", round(comb[1,2], 2), "km^2 of the built-up area was exposed to river or surface water flooding at a minimum depth of 15 cm"))
-  print_text(paste("Percentage of highest populated area exposed to combined flooding:", flood_pop_area("comb")$Percentage %>% scales::percent()))
+  print_text(paste0("In ", comb[1,1], ", ", round(comb[1,2], 2), " km^2 of the built-up area was exposed to river or surface water flooding at a minimum depth of 15 cm"))
+  print_text(paste("Percentage of highest populated area exposed to combined flooding:", flood_pop_area("comb")$Percentage))
 }
 print_text(flood_string("comb"))
 ```
 
 ## Flood Events
 ```{r}
+# Download flood archive files
+c("dbf", "prj", "shp", "shx") %>% lapply(function(suffix) {
+  curl_download(
+    url = paste0("https://floodobservatory.colorado.edu/temp/FloodArchive_region.", suffix),
+    destfile = paste0(flood_archive_file, "/FloodArchive_region.", suffix))
+})
+
 flood_archive <- read_sf(flood_archive_file)
 aoi <- read_sf("AOI") %>% st_transform("EPSG:4326")
 
@@ -1850,7 +1863,7 @@ ggplot(flood_text) +
 ggsave("plots/darthmouth_flood_events.pdf", device = "pdf",
        width = 20, height = 5.833, units = "in", dpi = "print")
 
-st_write(flood_archive, "data-sharing/03-analysis-inputs/flood-events/flood-events.shp")
+st_write(flood_archive, "data-sharing/03-analysis-inputs/flood-events/flood-events.shp", append = F)
 ```
 
 ## Earthquakes
@@ -1948,7 +1961,17 @@ eq_lines <- eq_text_select %>%
 x_axis <- tibble(date = c(seq(as.Date("1900-01-01"),as.Date("2022-12-31"), by = "50 year"), as.Date("2020-01-01")), year = lubridate::year(date)) %>%
   bind_rows(tibble(date = seq(as.Date("1900-01-01"),as.Date("2022-12-31"), by = "10 year"), year = NA))
 
-if (nrow(eq_text) > 0) eq_text # For some reason errors if 0 rows
+if (nrow(eq_text) > 0) {
+  print_text("Significant earthquakes within 500 km of city")
+  print_paged_df(eq_text) # For some reason errors if 0 rows
+  
+  eq_text %>% sf::st_drop_geometry() %>%
+  mutate(distance_round = ceiling(distance/100) * 100) %>%
+  count(distance_round) %>% arrange(distance_round) %>%
+  mutate(cumsum = cumsum(n)) %>% print_paged_df()
+} else {
+  "No significant earthquakes within 500 km"
+}
 
 ggplot(eq_text) +
   geom_point(aes(x = BEGAN), y = 0) +
@@ -1966,7 +1989,8 @@ ggplot(eq_text) +
   force_panelsizes(rows = unit(5.833, "in"), cols = unit(20, "in"))
 ggsave("plots/ngdc-earthquake-events.pdf", device = "pdf",
        width = 20, height = 5.833, units = "in", dpi = "print")
-st_write(eq_near, "data-sharing/03-analysis-inputs/earthquakes/earthquakes-1000km.shp")
+
+st_write(eq_near, "data-sharing/03-analysis-inputs/earthquakes/earthquakes-500km.shp", append = F)
 
 # bind_cols(eq_text, eq_text$geometry %>% st_coordinates()) %>%
 #   bind_cols(distance = st_distance(city_point, eq_text) %>% as.vector()) %>%
@@ -1978,14 +2002,110 @@ st_write(eq_near, "data-sharing/03-analysis-inputs/earthquakes/earthquakes-1000k
 #   geom_point() +
 #   theme(legend.position = "none") +
 #   geom_point(data = slice_max(eq_text, magXdist, n = 15), aes(x = distance, y = eqMagnitude), color = "gold")
-eq_text %>% filter(units::drop_units(distance) < 500)
+```
 
-print_paged_df(eq_text_select)
+## Cyclones  
+```{r}
+# Read cyclones from https://www.ncei.noaa.gov/products/international-best-track-archive
+# Haven't investigated why this isn't working
+# cyclones <- curl_and_delete(
+#     "https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/v04r00/access/shapefile/IBTrACS.since1980.list.v04r00.lines.zip",
+#     FUN = read_sf) %>%
+#   st_transform("EPSG:4326")
 
-eq_text %>% sf::st_drop_geometry() %>%
-  mutate(distance_round = ceiling(distance/100) * 100) %>%
-  count(distance_round) %>% arrange(distance_round) %>%
-  mutate(cumsum = cumsum(n)) %>% print_paged_df()
+cyclone_archive_file <- "../../03-multi-scan-materials/IBTrACS-tropical-cyclones"
+cyclones <- read_sf(cyclone_archive_file) %>%
+  st_transform("EPSG:4326")
+# plot(cyclones)
+
+cyclones_near_index <- st_is_within_distance(aoi, cyclones, as_units(500, "km"))
+cyclones_near <- cyclones[cyclones_near_index[[1]],]
+cyclones_near$distance_km <- drop_units(st_distance(st_centroid(aoi), cyclones_near)[1,])/1000
+cyclones_near <- cyclones_near %>% st_shift_longitude()
+# cyclones_near$LON <- cyclones_near %>% st_coordinates() %>% .[,"X"]
+
+cyclones_near %>% 
+  select(distance_km, USA_SSHS) %>%
+  ggplot() +
+  geom_sf(aes(color = USA_SSHS, alpha = USA_SSHS)) +
+  geom_sf(data = aoi, fill = "orange") +
+  scale_color_continuous(high = "#132B43", low = "#56B1F7", limits = c(-5, 4)) +
+  scale_alpha_continuous(limits = c(-5, 4)) +
+  coord_sf(crs = 3994) +
+           # xlim = c(171, 194))
+  # scale_x_continuous(limits = c(174, max(cyclones_near$LON)))
+  scale_x_continuous(breaks = c(-178, 178))
+```
+
+
+```{r}
+as.Date("2020-12-31") - as.Date("1984-01-01") # 13514
+as.Date("2025-12-31") - as.Date("1975-01-01") # 18627
+y_ratio <-1.49 # ratio should be 1.378 but doesn't quite work
+
+cyclones_text <- cyclones_near %>%
+  st_drop_geometry() %>%
+  # group_by(SID, NAME) %>%
+  summarize(.by = c(SID, NAME),
+    year = min(year),
+    month_start = min(month),
+    month_start_name = month.name[month_start],
+    month = paste(unique(c(min(month), max(month))), collapse = "-"),
+    BEGAN = as.Date(paste(year, month_start, "15", sep = "-")),
+    USA_SSHS = max(USA_SSHS, na.rm = T),
+    min_distance = min(distance_km, na.rm = T)) %>%
+  arrange(-USA_SSHS) %>%
+  mutate(
+    max_scale = case_when(
+      USA_SSHS < 0 ~ "Tropical depression",
+      USA_SSHS == 0 ~ "Tropical storm",
+      T ~ paste("Category", USA_SSHS)),
+    text = paste0(toupper(month_start_name), " ", year, "\n", NAME, " - ", max_scale))
+    
+cyclones_text_select <- cyclones_text %>% slice_min(min_distance, n = 10) %>%
+  arrange(BEGAN) %>%
+  mutate(above_line = (2*(row_number() %% 2) - 1)*-1,
+     node_x = BEGAN + y_ratio * 1460*above_line,
+     node_y = above_line * (1460 * tanpi(1/6) + 466/2) * y_ratio )    
+
+cyclones_lines <- cyclones_text_select %>%
+  select(SID, BEGAN, above_line, node_x, node_y) %>%
+  mutate(id = row_number()) %>%
+  { bind_rows(.,
+              mutate(., node_x = BEGAN, node_y = above_line * 466 / 2),
+              mutate(., node_x = BEGAN, node_y = 0)) }
+
+x_axis_ticks <- tibble(date = seq(as.Date("1980-01-01"),as.Date("2020-12-31"), by = "10 year"), year = lubridate::year(date)) %>%
+  bind_rows(tibble(date = seq(as.Date("1985-01-01"),as.Date("2020-12-31"), by = "10 year"), year = NA))
+   
+x_axis_years <- data.frame(x = seq(as.Date("1975-01-01"), as.Date("2025-12-31"), by = "years"), y = 0)
+x_axis_months <- data.frame(x = seq(as.Date("1975-01-01"), as.Date("2025-12-31"), by = "2 months"), y = 0)
+
+ggplot(cyclones_text) +
+  geom_point(aes(x = BEGAN), y = 0) +
+  # geom_point(aes(x = node_x, y = node_y)) +
+  geom_text(
+    data = cyclones_text_select,
+    aes(x = node_x + 0 * y_ratio, y = node_y - 0 * y_ratio, label = text, hjust = (above_line + 1)/2),
+    angle = 30, lineheight = 1) +
+  scale_x_date(limits = c(as.Date("1974-01-01"),as.Date("2025-12-31")), expand = c(0,0)) +
+  scale_y_continuous(limits = c(-1800, 1800) * y_ratio, breaks = c(1825,3650)) +
+  geom_path(data = cyclones_lines, aes(x = node_x, y = node_y, group = SID))  +
+  geom_point(data = x_axis_years, aes(x = x, y = y), pch = "|", size = 2) +
+  geom_point(data = x_axis_months, aes(x = x, y = y), size = 0.25) +
+  # geom_hline(yintercept = 0, linetype = "dotted") + 
+  geom_point(data = x_axis_ticks, aes(x = date-15, y = 0), pch = "|", size = 4) +
+  geom_point(data = x_axis_ticks, aes(x = date+15, y = 0), pch = "|", size = 4) +
+  geom_text(data = x_axis_ticks, aes(x = date, y = -0.25 * 466 * y_ratio, label = year)) +
+  theme_minimal() +
+  theme(axis.text = element_blank(), axis.title = element_blank(), panel.grid = element_blank()) +
+  force_panelsizes(rows = unit(5.833, "in"), cols = unit(20, "in"))
+ggsave("plots/ncei-cyclones.pdf", device = "pdf",
+       width = 20, height = 5.833, units = "in", dpi = "print")
+
+cyclones_text_select
+
+cyclones_text %>% filter(min_distance <50) %>% count(USA_SSHS)
 ```
 
 # Photovoltaic Potential (PV)

@@ -41,3 +41,6 @@ koeppen_file <- "../../03-multi-scan-materials/Koeppen-Geiger-ASCII.csv"
 
 # Flood Archive
 flood_archive_file <- "../../03-multi-scan-materials/flood-archive"
+
+# Cyclone Archive
+cyclone_archive_file <- "../../03-multi-scan-materials/IBTrACS-tropical-cyclones"
