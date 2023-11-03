@@ -7,21 +7,23 @@ output:
 ```{r, echo = F, message = F}
 knitr::opts_chunk$set(echo = F, results = "asis")
 
-library(tidyr)
-library(ggplot2)
-library(forcats)
-library(readxl)
-library(readr)
-library(stringr)
-library(ggrepel)
-library(directlabels)
-library(ggh4x)
-library(sf)
-library(curl)
-library(dplyr)
-library(rvest)
-library(units)
-library(exactextractr)
+librarian::shelf(
+  tidyr,
+  ggplot2,
+  forcats,
+  readxl,
+  readr,
+  stringr,
+  ggrepel,
+  directlabels,
+  ggh4x,
+  sf,
+  curl,
+  rvest,
+  units,
+  terra,
+  dplyr
+)
 
 country_groups <- read_csv("https://raw.githubusercontent.com/compoundrisk/monitor/databricks/src/country-groups.csv")
 source("https://raw.githubusercontent.com/compoundrisk/monitor/databricks/src/fns/helpers.R")
@@ -77,7 +79,16 @@ source("user-inputs.R")
 print_text(paste("City:", city), 1)
 print_text(paste("Country:", country), 1)
 print_text(paste("Manual benchmark cities:", paste_and(bm_cities_manual)), 1)
-print_text(paste("In Oxford:", in_oxford), 1)
+
+# Is city in Oxford Economics?
+oxford_locations <- readr::read_csv("../../03-multi-scan-materials/oxford-locations.csv", col_types = "c")
+oxford_locations_in_country <- dplyr::filter(oxford_locations, Country == country)
+in_oxford <- city %in% oxford_locations_in_country$Location
+if (!in_oxford) {
+  print_text(paste0(city, " is not in Oxford Economics. The included locations for ", country, " are ",
+                    paste_and(oxford_locations_in_country$Location),
+                    ". Is one of these an alternate name or spelling for ", city, "?"))
+}
 ```
 
 ---
@@ -415,6 +426,7 @@ pop_growth %>% mutate(growth_pct = (Population - lag(Population))/lag(Population
 
 ### Population Density
 ```{r}
+# Density from Oxford Economics
 density <- subset(oxford, Indicator == "Total population") %>%
   mutate(Group, Location, Population = 1000 * `2021`, .keep = "none")
 
@@ -434,7 +446,9 @@ density <- left_join(density, bm_areas, by = "Location")
 #     Area_km = units::drop_units(area)))
 # }
 
+# Density from citypopulation.de
 non_oxford_cities <- which_not(c(city, bm_cities_manual), oxford$Location) %>% .[!duplicated(.)]
+if (length(non_oxford_cities) > 0) {
 non_oxford_pop <- non_oxford_cities %>%
   lapply(function(x) {
     country_temp <- non_oxford_cities[(non_oxford_cities == x)][1] %>% names()
@@ -456,7 +470,9 @@ non_oxford_density <- non_oxford_pop %>% group_by(Location) %>%
     .keep = "none")
 
 if (nrow(non_oxford_density) > 0) density <- bind_rows(density, non_oxford_density)
+}
 
+# Density from manual data entry file
 density_manual <- read_csv("manual-data-entry/density.csv", col_types = "ccdcd") 
 density <- bind_rows(density, density_manual) %>%
   slice_tail(n = 1, by = Location)
@@ -1773,7 +1789,7 @@ print_text(flood_string("comb"))
 
 ## Flood Events
 ```{r}
-# Download flood archive files
+# Download flood archive files (can comment this out to use local file)
 c("dbf", "prj", "shp", "shx") %>% lapply(function(suffix) {
   curl_download(
     url = paste0("https://floodobservatory.colorado.edu/temp/FloodArchive_region.", suffix),
@@ -2111,18 +2127,18 @@ cyclones_text %>% filter(min_distance <50) %>% count(USA_SSHS)
 # Photovoltaic Potential (PV)
 ```{r}
 files <- list.files(pv_path) %>% 
-  subset(stringr::str_detect(., ".tif$"))
+  subset(stringr::str_detect(., ".tif$|.asc$"))
 
 aoi <- read_sf("AOI") %>% st_transform("EPSG:4326")
 
 monthly_pv <- lapply(files, function(f) {
   m <- f %>% substr(7, 8) %>% as.numeric()
-  month_country <- raster::raster(paste0(pv_path, f))
-  month <- exactextractr::exact_extract(month_country, aoi, include_area = T) %>% .[[1]]
-  max <- max(month$value, na.rm = T)
-  min <- min(month$value, na.rm = T)
-  mean <- mean(month$value, na.rm = T)
-  sum <- sum(month$value, na.rm = T)
+  month_country <- terra::rast(paste0(pv_path, f))
+  month <- terra::extract(month_country, aoi, include_area = T) %>% .[[2]]
+  max <- max(month, na.rm = T)
+  min <- min(month, na.rm = T)
+  mean <- mean(month, na.rm = T)
+  sum <- sum(month, na.rm = T)
   return(c(month = m, max = max, min = min, mean = mean, sum = sum))
 }) %>% bind_rows()
 
