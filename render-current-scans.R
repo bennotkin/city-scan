@@ -9,10 +9,10 @@ setwd("~/Documents/world-bank/crp/city-scans/01-current-scans/")
 
 # Render Current Scans
 list.files(recursive = T) %>% # List all of the files in the working directory
-  subset(str_detect(., "calculations-template.Rmd")) %>% # select only the relevant RMD files
+  subset(str_detect(., "scan-calculations.Rmd")) %>% # select only the relevant RMD files
   subset(!str_detect(., "0000-template")) %>% # Exclude the template file
   # Selection methods if you don't want to run all the calculations-template.Rmd files
-  subset(str_detect(., "da-nang")) %>% # select by string
+  subset(str_detect(., "mombasa")) %>% # select by string
   # .[c(10)] %>% # select by number
   lapply(function(file) {
     from_render <- T # This variable changes how the RMD file prints; must be defined for output to print prettily
