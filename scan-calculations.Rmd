@@ -7,20 +7,23 @@ output:
 ```{r, echo = F, message = F}
 knitr::opts_chunk$set(echo = F, results = "asis")
 
-library(tidyr)
-library(ggplot2)
-library(forcats)
-library(readxl)
-library(readr)
-library(stringr)
-library(ggrepel)
-library(directlabels)
-library(ggh4x)
-library(sf)
-library(curl)
-library(dplyr)
-library(rvest)
-library(units)
+librarian::shelf(
+  tidyr,
+  ggplot2,
+  forcats,
+  readxl,
+  readr,
+  stringr,
+  ggrepel,
+  directlabels,
+  ggh4x,
+  sf,
+  curl,
+  rvest,
+  units,
+  terra,
+  dplyr
+)
 
 country_groups <- read_csv("https://raw.githubusercontent.com/compoundrisk/monitor/databricks/src/country-groups.csv")
 source("https://raw.githubusercontent.com/compoundrisk/monitor/databricks/src/fns/helpers.R")
@@ -447,27 +450,27 @@ density <- left_join(density, bm_areas, by = "Location")
 # Density from citypopulation.de
 non_oxford_cities <- which_not(c(city, bm_cities_manual), oxford$Location) %>% .[!duplicated(.)]
 if (length(non_oxford_cities) > 0) {
-  non_oxford_pop <- non_oxford_cities %>%
-    lapply(function(x) {
-      country_temp <- non_oxford_cities[(non_oxford_cities == x)][1] %>% names()
-      if (length(country_temp) != 0) if (country_temp != "") country <- country_temp
-      data <- get_de_pop_growth(x, country = country)
-      return(data)
-    }) %>%
-    bind_rows() %>%
-    mutate(Location = str_extract(tolatin(Location), c(city, bm_cities) %>% paste(collapse = "|")))
-  
-  non_oxford_density <- non_oxford_pop %>% group_by(Location) %>%
-    filter(!is.na(Area_km)) %>%
-    slice_max(Year) %>%
-    mutate(
-      Location = Location,
-      Group = case_when(Location == city ~ city, T ~ "Benchmark"),
-      Area_km = Area_km,
-      Population = Population,
-      .keep = "none")
-  
-  if (nrow(non_oxford_density) > 0) density <- bind_rows(density, non_oxford_density)
+non_oxford_pop <- non_oxford_cities %>%
+  lapply(function(x) {
+    country_temp <- non_oxford_cities[(non_oxford_cities == x)][1] %>% names()
+    if (length(country_temp) != 0) if (country_temp != "") country <- country_temp
+    data <- get_de_pop_growth(x, country = country)
+    return(data)
+  }) %>%
+  bind_rows() %>%
+  mutate(Location = str_extract(tolatin(Location), c(city, bm_cities) %>% paste(collapse = "|")))
+
+non_oxford_density <- non_oxford_pop %>% group_by(Location) %>%
+  filter(!is.na(Area_km)) %>%
+  slice_max(Year) %>%
+  mutate(
+    Location = Location,
+    Group = case_when(Location == city ~ city, T ~ "Benchmark"),
+    Area_km = Area_km,
+    Population = Population,
+    .keep = "none")
+
+if (nrow(non_oxford_density) > 0) density <- bind_rows(density, non_oxford_density)
 }
 
 # Density from manual data entry file

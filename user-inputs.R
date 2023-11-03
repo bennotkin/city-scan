@@ -9,11 +9,6 @@ map_file_prefices <- c("'Mombasa_'", "'mombasa_'") # Include single quotations a
 bm_cities_manual <- NULL # NULL when not in use; add country as element name (as used by citypopulation.de) when it differs from focus city's country
 nearby_countries_string <- "kenya|rwanda|uganda|tanzania|somalia|ethiopia|malawi|madagas|burundi|comoros|djib|eritrea|maurit|mozam|seyche|reunion|south sudan|zambia|zimbab"
 
-# Oxford Economics
-# Is city in Oxford Economics?
-# oxford_locations <- readr::read_csv("../../03-multi-scan-materials/oxford-locations.csv", col_types = "c")
-# dplyr::filter(oxford_locations, Country == country)
-# in_oxford <- T
 # If there is no Oxford data, manually set population
 # population_manual <- 
 # area_manual <- c("" = X)
