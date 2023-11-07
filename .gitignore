@@ -1,9 +1,5 @@
-.DS_Store
+**.DS_Store
 AOI
-scan/.DS_Store
-scan/Links/.DS_Store
-Maps/.DS_Store
-plots/.DS_Store
 scan/Links/map_*
 scan/Links/oxford-*
 scan/Links/wsf-*
@@ -15,3 +11,6 @@ plots/*
 Stats/*
 Maps/*
 scan/template-city-scan.indd
+data-sharing/*
+**/Document fonts
+other-areas
