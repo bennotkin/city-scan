@@ -143,7 +143,7 @@ if (nrow(missing_maps) > 0) {
 # Area
 aoi <- read_sf("AOI") %>%
   st_transform("EPSG:4326")
-area <- units::set_units(st_area(aoi), km^2)
+area <- units::set_units(st_area(st_combine(aoi)), km^2)
 # Get area
 print_text(paste("AOI Area:", round(area, 1), "sq km"))
 
@@ -235,7 +235,9 @@ Benchmark cities are selected as cities that are in neighboring countries and ha
 
 ```{r}
 # Read Data ----
-oxford_full <- read_csv(oxford_file, col_types = "cccccccccdddddddddddddddddddddddddddddddddddddddddcllldlcclcc")
+if (!exists("oxford_full")) oxford_full <-
+  read_csv(oxford_file,
+           col_types = "cccccccccdddddddddddddddddddddddddddddddddddddddddcllldlcclcc")
 # competitive_cities <- read_xlsx("/Users/bennotkin/Documents/world-bank/crp/City Scan onboard material/competitive_cities_master_dataset_2000_2015.xlsx", sheet = "Data")
 
 pop <- oxford_full %>%
@@ -272,7 +274,7 @@ nearby_cities <- oxford_full %>%
 bm_cities <- oxford_full %>%
   select(Location, Country, Indicator, `2021`) %>%
   subset(Location %in% nearby_cities & Indicator == "Total population") %>%
-  subset((between(`2021`, pop*.5, pop*1.5) | Country == country) & Location != city) %>%
+  subset((between(`2021`, pop*.66, pop*1.33)) & Location != city) %>%
   .$Location
 
 # Manualy select benchmark cities
@@ -317,7 +319,7 @@ oxford %>%
 countries <- oxford$Country %>% unique()
 oxford_countries <- subset(oxford_full, Country %in% countries) %>%
   subset(str_detect(Location, "- Total") | Location %in% countries, select = -Location)
-rm(oxford_full)
+# rm(oxford_full)
 
 # Select indicators used in oxford
 indicators <- select(oxford, Indicator) %>% distinct()
@@ -330,48 +332,63 @@ extra_inds <- c("Total population", "Employment - Total", "GDP, real, US$ - Tota
 
 ### Population Growth
 ```{r}
-if (in_oxford) {
-  pop_growth <- subset(oxford, Location == city & Indicator == "Total population") %>%
-    select(Location, contains("20")) %>% # View()
-    pivot_longer(cols = contains("20"), values_to = "Population", names_to = "Year") %>%
-    mutate(Year = as.numeric(Year), Population = 1000*Population) %>%
-    subset(Year <= 2021)
-} else {
-  # If no Oxford data, find what you can (which may require multiple sources):
-  # Select whether to use citypopulation.de or UN data based on which has more data
-  # Alternatively, can plot both, coloring each line by Source column
-  pop_growth <- bind_rows(get_un_pop_growth(city, country),
-                          get_de_pop_growth(city, country))
-  
-  larger_source <- sort(table(c(pop_growth$Source)), decreasing = T)[1] %>% names()
-  pop_growth <- pop_growth %>%
-    filter(Source == larger_source) %>%
-    arrange(Year)
-  if (nrow(pop_growth) == 0) {
-    warning("No population data from UN or citypopulation.de. Reading from manual-data-entry/pop.csv")
-    
-    # Other data source, manually downloaded/created
-    pop_growth <- read_csv("manual-data-entry/pop.csv", col_types = "c") %>%
-      mutate(Year = as.numeric(Year), Population = as.numeric(Population)) %>%
-      # mutate(Source = "Turkish Stastistical Institute") %>%
-      # subset(Location == city & !is.na(Population)) %>% arrange(Year)
-      remove_missing()
-    
-    # If we want to display multiple sources
-    # pop_growth <- bind_rows(pop_growth_1, pop_growth_2)
-    # hues <- c("black", "dark grey") %>% #c(scales::hue_pal()(2)) %>% 
-    # setNames(c(pop_growth_1$Source[1]), pop_growth_2$Source[1])
-  }
+pop_longitude <- subset(oxford, Indicator == "Total population") %>%
+   select(Group, Location, Country, Indicator, matches('\\d')) %>%
+    pivot_longer(cols = matches('^\\d'), names_to = "Year", values_to = "Value") %>%
+    pivot_wider(values_from = Value, names_from = Indicator) %>%
+    mutate(
+      Year = as.numeric(Year),
+      Population = `Total population` * 1000,
+      Source = "Oxford",
+      Method = "Oxford",
+      .keep = "unused") %>%
+    arrange(Group) %>% 
+    subset(Year <= 2021 & !is.na(Population))
+
+bm_areas <- read_csv(oxford_areas_file, col_types = "ccd") %>%
+  mutate(Location = str_to_title(Location)) %>%
+  filter(Location %in% str_to_title(pop_longitude$Location)) %>%
+  select(-Country)
+if (any(duplicated(bm_areas$Location))) stop("Multiple Oxford Economics cities have been matched with the same name")
+pop_longitude <- left_join(pop_longitude, bm_areas, by = "Location")
+
+# Pop from citypopulation.de
+non_oxford_cities <- which_not(c(city, bm_cities_manual), oxford$Location) %>% .[!duplicated(.)]
+if (length(non_oxford_cities) > 0) {
+non_oxford_pop <- non_oxford_cities %>%
+  lapply(function(x) {
+    country_temp <- non_oxford_cities[(non_oxford_cities == x)][1] %>% names()
+    if (length(country_temp) != 0) if (country_temp != "") country <- country_temp
+    data <- get_de_pop_growth(x, country = country)
+    return(data)
+  }) %>%
+  bind_rows() %>%
+  mutate(Location = str_extract(tolatin(Location), c(city, bm_cities) %>% paste(collapse = "|")),
+         Method = "get_de_pop_growth()",
+    Group = case_when(Location == city ~ city, T ~ "Benchmark"))
+if (nrow(non_oxford_pop) > 0) pop_longitude <- bind_rows(pop_longitude, non_oxford_pop)
 }
 
+# Pop from manual data entry file
+pop_manual <- read_csv("manual-data-entry/pop.csv", col_types = "ccddc") %>% mutate(Method = "Manual")
+# Here I choose to always go with the manual data over the citypop data
+# Alternatively, i could choose the larger data source by binding first and then:
+#  larger_source <- sort(table(c(pop_longitude$Method)), decreasing = T)[1] %>% names()
+#  pop_longitude <- pop_longitude %>% filter(Method == larger_source)
+pop_longitude <- pop_longitude %>% filter(Location %ni% pop_manual$Location)
+pop_longitude <- bind_rows(pop_longitude, pop_manual)
+
+pop_growth <- pop_longitude %>% filter(Group == city) %>% select(-Area_km)
+if (in_oxford) pop_growth <- bind_rows(pop_growth, get_de_pop_growth(city, country))
+
 # Write pop_growth to data-sharing
-write_csv(pop_growth, "data-sharing/04-tabular-data/population-growth.csv")
+write_csv(select(pop_growth), "data-sharing/04-tabular-data/population-growth.csv")
 
 # Make pop_growth plot
 pop_min_year <- min(pop_growth$Year)
 pop_max_year <- max(pop_growth$Year)
 
-pop_growth_plot <- ggplot(pop_growth, aes(x = Year, y = Population)) + #, color = Source))
+pop_growth_plot <- ggplot(pop_growth, aes(x = Year, y = Population, group = Location)) + #, color = Source))
   geom_line() +
   geom_point() +  
   scale_x_continuous(
@@ -427,16 +444,7 @@ pop_growth %>% mutate(growth_pct = (Population - lag(Population))/lag(Population
 
 ### Population Density
 ```{r}
-# Density from Oxford Economics
-density <- subset(oxford, Indicator == "Total population") %>%
-  mutate(Group, Location, Population = 1000 * `2021`, .keep = "none")
-
-bm_areas <- read_csv(oxford_areas_file, col_types = "ccd") %>%
-  mutate(Location = str_to_title(Location)) %>%
-  filter(Location %in% str_to_title(density$Location))
-if (any(duplicated(bm_areas$Location))) stop("Multiple Oxford Economics cities have been matched with the same name")
-
-density <- left_join(density, bm_areas, by = "Location")
+density <- pop_longitude %>% slice_max(order_by = Year, by = Location)
 
 # if (!in_oxford) {
 #   density <- bind_rows(density, data.frame(
@@ -446,37 +454,6 @@ density <- left_join(density, bm_areas, by = "Location")
 #     Country = country,
 #     Area_km = units::drop_units(area)))
 # }
-
-# Density from citypopulation.de
-non_oxford_cities <- which_not(c(city, bm_cities_manual), oxford$Location) %>% .[!duplicated(.)]
-if (length(non_oxford_cities) > 0) {
-non_oxford_pop <- non_oxford_cities %>%
-  lapply(function(x) {
-    country_temp <- non_oxford_cities[(non_oxford_cities == x)][1] %>% names()
-    if (length(country_temp) != 0) if (country_temp != "") country <- country_temp
-    data <- get_de_pop_growth(x, country = country)
-    return(data)
-  }) %>%
-  bind_rows() %>%
-  mutate(Location = str_extract(tolatin(Location), c(city, bm_cities) %>% paste(collapse = "|")))
-
-non_oxford_density <- non_oxford_pop %>% group_by(Location) %>%
-  filter(!is.na(Area_km)) %>%
-  slice_max(Year) %>%
-  mutate(
-    Location = Location,
-    Group = case_when(Location == city ~ city, T ~ "Benchmark"),
-    Area_km = Area_km,
-    Population = Population,
-    .keep = "none")
-
-if (nrow(non_oxford_density) > 0) density <- bind_rows(density, non_oxford_density)
-}
-
-# Density from manual data entry file
-density_manual <- read_csv("manual-data-entry/density.csv", col_types = "ccdcd") 
-density <- bind_rows(density, density_manual) %>%
-  slice_tail(n = 1, by = Location)
 
 density$Density <- density$Population/density$Area_km
 density <- density %>% arrange(desc(Density))
@@ -879,42 +856,31 @@ if (in_oxford) {
 }
 ```
 
-
 ```{r}
-if (in_oxford) {
-  pop_longitude <- oxford %>% subset(Indicator %in% extra_inds) %>%
-    select(Group, Location, Country, Indicator, matches('\\d')) %>%
-    pivot_longer(cols = matches('^\\d'), names_to = "Year", values_to = "Value") %>%
-    pivot_wider(values_from = Value, names_from = Indicator) %>%
-    mutate(
-      Year = as.numeric(Year),
-      Population = `Total population` * 1000) %>%
-    arrange(Group) %>% 
-    subset(Year <= 2021 & !is.na(Population))
-  
-  print_text("Total pop in 2021")
-  pop_longitude %>% slice_max(Year) %>% arrange(-Population) %>% select(Group, Location, Population) %>%
-    print_paged_df()
-  
-  multi_city_pop_plot <- ggplot(pop_longitude) +
-    geom_line(aes(x = Year, y = `Population`, group = Location, color = Group)) +
-    scale_color_manual(values = hues) +
-    theme_minimal() +
-    theme(panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
-          panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray"),
-          axis.line = element_line(linewidth = .5, color = "black"),
-          legend.position = "none") +
-    labs(title = paste("Population of", city, "and benchmark cities"), x = "") +
-    scale_y_continuous(labels = scales::label_comma(), expand = c(0,0)) +
-    scale_x_continuous(breaks = seq(min(pop_longitude$Year), 2021, 5), minor_breaks = seq(2000,2030,1), limits = c(min(pop_longitude$Year), 2028), expand = c(0,0)) +
-    # geom_dl(aes(label = Location), method = list(dl.combine("first.points", "last.points")), cex = 0.8) 
-    geom_text_repel(data = pop_longitude %>% subset(Year == 2021), aes(label = Location, x = 2021, y = `Population`, color = Group), 
-                    hjust = 0, size = 3, xlim = c(2021.25, 2030), box.padding = 0.05, direction = "y")
-  ggsave("plots/oxford-pop_line.png", device = "png",
-         width = 5, height = 4.6, units = "in", dpi = "print")
-  # print_paged_df(pop_longitude)
-  ggplot2:::print.ggplot(multi_city_pop_plot)
-}
+print_text("Total pop in latest year")
+pop_longitude %>% group_by(Location) %>% slice_max(Year) %>% arrange(-Population) %>% select(Group, Location, Year, Population) %>%
+  arrange(Group, Population) %>%
+  print_paged_df()
+
+multi_city_pop_plot <- ggplot(pop_longitude) +
+  geom_line(aes(x = Year, y = `Population`, group = Location, color = Group)) +
+  scale_color_manual(values = hues) +
+  theme_minimal() +
+  theme(panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
+        panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray"),
+        axis.line = element_line(linewidth = .5, color = "black"),
+        legend.position = "none") +
+  labs(title = paste("Population of", city, "and benchmark cities"), x = "") +
+  scale_y_continuous(labels = scales::label_comma(), expand = c(0,0)) +
+  scale_x_continuous(breaks = seq(min(pop_longitude$Year), 2021, 5), minor_breaks = seq(2000,2030,1), expand = c(0,0)) +
+  # geom_dl(aes(label = Location), method = list(dl.combine("first.points", "last.points")), cex = 0.8) 
+  geom_text_repel(data = pop_longitude %>% slice_max(order_by = Year, by = Location), aes(label = Location, x = 2021, y = `Population`, color = Group), 
+                  hjust = 0, size = 3, xlim = c(2021.25, 2030), box.padding = 0.05, direction = "y") +
+  coord_cartesian(xlim = c(max(2000, min(c(pop_longitude$Year))), 2028))
+ggsave("plots/oxford-pop_line.png", device = "png",
+       width = 5, height = 4.6, units = "in", dpi = "print")
+# print_paged_df(pop_longitude)
+ggplot2:::print.ggplot(multi_city_pop_plot)
 ```
 
 
@@ -1803,7 +1769,8 @@ aoi <- read_sf("AOI") %>% st_transform("EPSG:4326")
 flood_archive <- st_make_valid(flood_archive)
 flood_archive <- flood_archive[st_is_valid(flood_archive),]
 aoi <- st_transform(aoi, crs = st_crs(flood_archive))
-flood_archive <- flood_archive[st_intersects(flood_archive, aoi, sparse = F),]
+intersections <- which(apply(st_intersects(flood_archive, aoi, sparse = F), 1, any))
+flood_archive <- flood_archive[intersections,]
 
 print_text("Map of floods")
 ggplot(flood_archive) +
@@ -1921,7 +1888,7 @@ y_ratio <- 51498 / 13514
 # 3.324 
 
 aoi <- read_sf("AOI") %>% st_transform("EPSG:4326")
-city_point <- aoi %>% st_centroid()
+city_point <- aoi %>% st_combine() %>% st_centroid()
 
 eq_near <- eq %>%
   subset(!is.na(latitude)) %>%
@@ -2030,7 +1997,6 @@ st_write(eq_near, "data-sharing/03-analysis-inputs/earthquakes/earthquakes-500km
 #     FUN = read_sf) %>%
 #   st_transform("EPSG:4326")
 
-cyclone_archive_file <- "../../03-multi-scan-materials/IBTrACS-tropical-cyclones"
 cyclones <- read_sf(cyclone_archive_file) %>%
   st_transform("EPSG:4326")
 # plot(cyclones)

@@ -6,7 +6,7 @@ country <- "Kenya"
 map_file_prefices <- c("'Mombasa_'", "'mombasa_'") # Include single quotations around prefices
 
 # Selecting Benchmark cities (additional cities will be chosen via Oxford Economics and nearby_countries_string)
-bm_cities_manual <- NULL # NULL when not in use; add country as element name (as used by citypopulation.de) when it differs from focus city's country
+bm_cities_manual <- c("Kilifi", "Malindi", "Ukunda") # NULL when not in use; add country as element name (as used by citypopulation.de) when it differs from focus city's country
 nearby_countries_string <- "kenya|rwanda|uganda|tanzania|somalia|ethiopia|malawi|madagas|burundi|comoros|djib|eritrea|maurit|mozam|seyche|reunion|south sudan|zambia|zimbab"
 
 # If there is no Oxford data, manually set population
