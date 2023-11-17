@@ -13,7 +13,7 @@ files <- list.files(dir)
 files <- files[grep(city_string, files)]
 for (f in files) {
     old_name <- paste0(dir, "/", f)
-    new_name <- paste0(dir, "/", gsub(paste0(city_string, "(AOI_)?"), "map_", f))
+    new_name <- paste0(dir, "/", gsub(paste0(city_string, "|", tolower(city_string), "(AOI_)?"), "map_", f))
     file.rename(old_name, new_name)
     # print(paste(old_name, "→", new_name))
 }

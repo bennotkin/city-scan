@@ -179,7 +179,7 @@ get_un_pop_growth <- function(city, country = country) {
 
 get_de_pop_growth <- function(city, country = country) {
   # citypopulation.de
-  url <- paste0("https://www.citypopulation.de/en/", tolower(country), "/cities/")
+  url <- paste0("https://www.citypopulation.de/en/", str_replace_all(tolower(country), " ", ""), "/cities/")
   de <- read_html(url) %>%
     html_node("section#citysection") %>%
     html_node("table") %>%
@@ -255,8 +255,7 @@ if (length(pop) > 0) {
 }
 
 # Select all cities in nearby countries
-nearby_cities <- oxford_full %>% 
-  select(Location, Country) %>% distinct() %>%
+nearby_cities <- oxford_locations %>%
   subset(str_detect(tolower(Country), nearby_countries_string)) %>%
   subset(Location != Country & !str_detect(Location, "Total")) %>%
   .$Location
@@ -331,6 +330,7 @@ extra_inds <- c("Total population", "Employment - Total", "GDP, real, US$ - Tota
 
 ### Population Growth
 ```{r}
+if (nrow(oxford) > 0) {
 pop_longitude <- subset(oxford, Indicator == "Total population") %>%
    select(Group, Location, Country, Indicator, matches('\\d')) %>%
     pivot_longer(cols = matches('^\\d'), names_to = "Year", values_to = "Value") %>%
@@ -350,6 +350,16 @@ bm_areas <- read_csv(oxford_areas_file, col_types = "ccd") %>%
   select(-Country)
 if (any(duplicated(bm_areas$Location))) stop("Multiple Oxford Economics cities have been matched with the same name")
 pop_longitude <- left_join(pop_longitude, bm_areas, by = "Location")
+} else {
+  pop_longitude <- data.frame(
+    Group = factor(),
+    Location = character(),
+    Country = character(),
+    Year = numeric(),
+    Population = numeric(),
+    Source = character(),
+    Method = character())
+}
 
 # Pop from citypopulation.de
 non_oxford_cities <- which_not(c(city, bm_cities_manual), oxford$Location) %>% .[!duplicated(.)]
@@ -382,6 +392,9 @@ if (in_oxford) pop_growth <- bind_rows(pop_growth, get_de_pop_growth(city, count
 
 # Write pop_growth to data-sharing
 write_csv(pop_growth, "data-sharing/04-tabular-data/population-growth.csv")
+
+pop_capital <- read_xls("/Users/bennotkin/Documents/world-bank/crp/city-scans/03-multi-scan-materials/WUP2018-F13-Capital_Cities.xls", skip = 16)
+pop_capital %>% filter(str_detect(`Country or area`, nearby_countries_string))
 
 # Make pop_growth plot
 pop_min_year <- min(pop_growth$Year)
@@ -457,7 +470,7 @@ density <- pop_longitude %>% slice_max(order_by = Year, by = Location)
 density$Density <- density$Population/density$Area_km
 density <- density %>% arrange(desc(Density))
 
-city_pop_density <- density[which(density$Location == city), "Density"] %>% pull()
+city_pop_density <- density[which(density$Location == city), "Density"]
 
 hues <- c("black", "dark grey") %>% #c(scales::hue_pal()(2)) %>% 
   setNames(c(city, "Benchmark"))
@@ -590,9 +603,9 @@ Reproductive age is percentage of female population that is of reproductive age
 
 ```{r}
 # WorldPop Age Groups
-age_file <- list.files()[!is.na(str_match(list.files(), ".*age_distribution.csv"))]
+age_file <- list.files("Stats")[!is.na(str_match(list.files("Stats"), ".*age_distribution.csv"))]
 if (length(age_file) == 0) warning("No WorldPop age distribution file") else {
-  pop_dist_group_wp <- read_csv(age_file, col_types = "fdd") %>% 
+  pop_dist_group_wp <- read_csv(paste0("Stats/", age_file), col_types = "fdd") %>% 
     rename(Age_Bracket = age_group, Female = female, Male = male) %>%
     pivot_longer(cols = c("Female", "Male"), names_to = "Sex", values_to = "Count") %>% 
     mutate(Age_Bracket = forcats::fct_collapse(Age_Bracket, "0-4" = c("<1", "1-4"))) %>%
@@ -2021,73 +2034,75 @@ cyclones_near %>%
 
 
 ```{r}
-as.Date("2020-12-31") - as.Date("1984-01-01") # 13514
-as.Date("2025-12-31") - as.Date("1975-01-01") # 18627
-y_ratio <-1.49 # ratio should be 1.378 but doesn't quite work
-
-cyclones_text <- cyclones_near %>%
-  st_drop_geometry() %>%
-  # group_by(SID, NAME) %>%
-  summarize(.by = c(SID, NAME),
-    year = min(year),
-    month_start = min(month),
-    month_start_name = month.name[month_start],
-    month = paste(unique(c(min(month), max(month))), collapse = "-"),
-    BEGAN = as.Date(paste(year, month_start, "15", sep = "-")),
-    USA_SSHS = max(USA_SSHS, na.rm = T),
-    min_distance = min(distance_km, na.rm = T)) %>%
-  arrange(-USA_SSHS) %>%
-  mutate(
-    max_scale = case_when(
-      USA_SSHS < 0 ~ "Tropical depression",
-      USA_SSHS == 0 ~ "Tropical storm",
-      T ~ paste("Category", USA_SSHS)),
-    text = paste0(toupper(month_start_name), " ", year, "\n", NAME, " - ", max_scale))
-    
-cyclones_text_select <- cyclones_text %>% slice_min(min_distance, n = 10) %>%
-  arrange(BEGAN) %>%
-  mutate(above_line = (2*(row_number() %% 2) - 1)*-1,
-     node_x = BEGAN + y_ratio * 1460*above_line,
-     node_y = above_line * (1460 * tanpi(1/6) + 466/2) * y_ratio )    
-
-cyclones_lines <- cyclones_text_select %>%
-  select(SID, BEGAN, above_line, node_x, node_y) %>%
-  mutate(id = row_number()) %>%
-  { bind_rows(.,
-              mutate(., node_x = BEGAN, node_y = above_line * 466 / 2),
-              mutate(., node_x = BEGAN, node_y = 0)) }
-
-x_axis_ticks <- tibble(date = seq(as.Date("1980-01-01"),as.Date("2020-12-31"), by = "10 year"), year = lubridate::year(date)) %>%
-  bind_rows(tibble(date = seq(as.Date("1985-01-01"),as.Date("2020-12-31"), by = "10 year"), year = NA))
-   
-x_axis_years <- data.frame(x = seq(as.Date("1975-01-01"), as.Date("2025-12-31"), by = "years"), y = 0)
-x_axis_months <- data.frame(x = seq(as.Date("1975-01-01"), as.Date("2025-12-31"), by = "2 months"), y = 0)
-
-ggplot(cyclones_text) +
-  geom_point(aes(x = BEGAN), y = 0) +
-  # geom_point(aes(x = node_x, y = node_y)) +
-  geom_text(
-    data = cyclones_text_select,
-    aes(x = node_x + 0 * y_ratio, y = node_y - 0 * y_ratio, label = text, hjust = (above_line + 1)/2),
-    angle = 30, lineheight = 1) +
-  scale_x_date(limits = c(as.Date("1974-01-01"),as.Date("2025-12-31")), expand = c(0,0)) +
-  scale_y_continuous(limits = c(-1800, 1800) * y_ratio, breaks = c(1825,3650)) +
-  geom_path(data = cyclones_lines, aes(x = node_x, y = node_y, group = SID))  +
-  geom_point(data = x_axis_years, aes(x = x, y = y), pch = "|", size = 2) +
-  geom_point(data = x_axis_months, aes(x = x, y = y), size = 0.25) +
-  # geom_hline(yintercept = 0, linetype = "dotted") + 
-  geom_point(data = x_axis_ticks, aes(x = date-15, y = 0), pch = "|", size = 4) +
-  geom_point(data = x_axis_ticks, aes(x = date+15, y = 0), pch = "|", size = 4) +
-  geom_text(data = x_axis_ticks, aes(x = date, y = -0.25 * 466 * y_ratio, label = year)) +
-  theme_minimal() +
-  theme(axis.text = element_blank(), axis.title = element_blank(), panel.grid = element_blank()) +
-  force_panelsizes(rows = unit(5.833, "in"), cols = unit(20, "in"))
-ggsave("plots/ncei-cyclones.pdf", device = "pdf",
-       width = 20, height = 5.833, units = "in", dpi = "print")
-
-cyclones_text_select
-
-cyclones_text %>% filter(min_distance <50) %>% count(USA_SSHS)
+if (nrow(cyclones_near) > 0) {
+  as.Date("2020-12-31") - as.Date("1984-01-01") # 13514
+  as.Date("2025-12-31") - as.Date("1975-01-01") # 18627
+  y_ratio <-1.49 # ratio should be 1.378 but doesn't quite work
+  
+  cyclones_text <- cyclones_near %>%
+    st_drop_geometry() %>%
+    # group_by(SID, NAME) %>%
+    summarize(.by = c(SID, NAME),
+      year = min(year),
+      month_start = min(month),
+      month_start_name = month.name[month_start],
+      month = paste(unique(c(min(month), max(month))), collapse = "-"),
+      BEGAN = as.Date(paste(year, month_start, "15", sep = "-")),
+      USA_SSHS = max(USA_SSHS, na.rm = T),
+      min_distance = min(distance_km, na.rm = T)) %>%
+    arrange(-USA_SSHS) %>%
+    mutate(
+      max_scale = case_when(
+        USA_SSHS < 0 ~ "Tropical depression",
+        USA_SSHS == 0 ~ "Tropical storm",
+        T ~ paste("Category", USA_SSHS)),
+      text = paste0(toupper(month_start_name), " ", year, "\n", NAME, " - ", max_scale))
+      
+  cyclones_text_select <- cyclones_text %>% slice_min(min_distance, n = 10) %>%
+    arrange(BEGAN) %>%
+    mutate(above_line = (2*(row_number() %% 2) - 1)*-1,
+       node_x = BEGAN + y_ratio * 1460*above_line,
+       node_y = above_line * (1460 * tanpi(1/6) + 466/2) * y_ratio )    
+  
+  cyclones_lines <- cyclones_text_select %>%
+    select(SID, BEGAN, above_line, node_x, node_y) %>%
+    mutate(id = row_number()) %>%
+    { bind_rows(.,
+                mutate(., node_x = BEGAN, node_y = above_line * 466 / 2),
+                mutate(., node_x = BEGAN, node_y = 0)) }
+  
+  x_axis_ticks <- tibble(date = seq(as.Date("1980-01-01"),as.Date("2020-12-31"), by = "10 year"), year = lubridate::year(date)) %>%
+    bind_rows(tibble(date = seq(as.Date("1985-01-01"),as.Date("2020-12-31"), by = "10 year"), year = NA))
+     
+  x_axis_years <- data.frame(x = seq(as.Date("1975-01-01"), as.Date("2025-12-31"), by = "years"), y = 0)
+  x_axis_months <- data.frame(x = seq(as.Date("1975-01-01"), as.Date("2025-12-31"), by = "2 months"), y = 0)
+  
+  ggplot(cyclones_text) +
+    geom_point(aes(x = BEGAN), y = 0) +
+    # geom_point(aes(x = node_x, y = node_y)) +
+    geom_text(
+      data = cyclones_text_select,
+      aes(x = node_x + 0 * y_ratio, y = node_y - 0 * y_ratio, label = text, hjust = (above_line + 1)/2),
+      angle = 30, lineheight = 1) +
+    scale_x_date(limits = c(as.Date("1974-01-01"),as.Date("2025-12-31")), expand = c(0,0)) +
+    scale_y_continuous(limits = c(-1800, 1800) * y_ratio, breaks = c(1825,3650)) +
+    geom_path(data = cyclones_lines, aes(x = node_x, y = node_y, group = SID))  +
+    geom_point(data = x_axis_years, aes(x = x, y = y), pch = "|", size = 2) +
+    geom_point(data = x_axis_months, aes(x = x, y = y), size = 0.25) +
+    # geom_hline(yintercept = 0, linetype = "dotted") + 
+    geom_point(data = x_axis_ticks, aes(x = date-15, y = 0), pch = "|", size = 4) +
+    geom_point(data = x_axis_ticks, aes(x = date+15, y = 0), pch = "|", size = 4) +
+    geom_text(data = x_axis_ticks, aes(x = date, y = -0.25 * 466 * y_ratio, label = year)) +
+    theme_minimal() +
+    theme(axis.text = element_blank(), axis.title = element_blank(), panel.grid = element_blank()) +
+    force_panelsizes(rows = unit(5.833, "in"), cols = unit(20, "in"))
+  ggsave("plots/ncei-cyclones.pdf", device = "pdf",
+         width = 20, height = 5.833, units = "in", dpi = "print")
+  
+  cyclones_text_select %>% print_paged_df()
+  
+  cyclones_text %>% filter(min_distance <50) %>% count(USA_SSHS)  %>% print_paged_df()
+}
 ```
 
 # Photovoltaic Potential (PV)
