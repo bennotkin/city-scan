@@ -49,7 +49,6 @@ plot,wsf-pufu-plot.png,Urban Built-up Area Exposed to Combined River and Rainwat
 map,map_POP_fu.png,Population Exposed to River Flooding,7,8,all,
 map,map_POP_pu.png,Population Exposed to Rainwater Flooding,7,9,all,
 map,map_POP_comb.png,Population Exposed to Combined River and Rainwater Flooding,7,10,all,
-map,map_sea_rise.png,Sea Level Rise,7,11,coastal,Take as a screen shot; file never exists.
 map,map_erosion.png,Erosion,7,12,coastal,Take as a screen shot; file never exists.
 map,map_contour.png,Elevation,7,13,all,
 plot,wsf-elevation-pieplot.png,Elevation,7,13,,
@@ -57,13 +56,23 @@ map,map_slope.png,Slope,7,14,all,
 plot,wsf-slope-pieplot.png,Slope,7,14,all,
 map,map_LS.png,Landslide Susceptibility,7,15,all,
 plot,ngdc-earthquake-events.pdf,Earthquake Events,7,16,,
-map,map_seismic_hazard.png,Seismic Hazard & Risk,7,17,all,Take as a screen shot; file never exists.
-map,map_seismic_risk.png,Seismic Hazard & Risk,7,17,all,Take as a screen shot; file never exists.
-map,map_criticality.png,Road Network Criticality,7,18,all,
+map,map_seismic_hazard.png,Seismic Hazard & Risk,7,18,all,Take as a screen shot; file never exists.
+map,map_seismic_risk.png,Seismic Hazard & Risk,7,18,all,Take as a screen shot; file never exists.
+map,map_criticality.png,Road Network Criticality,7,19,all,
 map,map_network_plot.png,Not shown,NA,NA,none,
 map,map_WSF_85_95_05.png,Not shown,NA,NA,none,
 map,map_WSF_85_95.png,Not shown,NA,NA,none,
 map,map_WSF_85.png,Not shown,NA,NA,none,
+map,map_Liquefaction.png,Liquefaction Susceptibility,7,17,all,
+map,map_burnability,Burnability,7,20,all,
+map,map_NDMI.png,Moisture,7,21,all,
+map,map_historical_fire,Historical Burnt Area,7,22,all,
+map,map_fwi.png,Fire Weather Index,7,23,all,
 plot,oxford-gdp-per-capita.png,Not shown,NA,NA,none,
 plot,oxford-household-incomes-area.png,Not shown,NA,NA,none,
 plot,oxford-household-incomes-bar.png,Not shown,NA,NA,none,
+plot,fwi.png,Fire Weather Index,7,23,all,
+map,map_pop_slr_RL10_ssp245.png,Sea Level Rise,7,11,coastal,Is city coastal?
+map,map_pop_slr_RL10_ssp585.png,Sea Level Rise,7,11,coastal,Is city coastal?
+map,map_pop_slr_ssp245.png,Sea Level Rise,7,11,costal,Is city coastal?
+map,map_pop_slr_ssp585.png,Sea Level Rise,7,11,coastal,Is city coastal?
