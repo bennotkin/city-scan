@@ -384,17 +384,32 @@ pop_manual <- read_csv("manual-data-entry/pop.csv", col_types = "ccddc") %>% mut
 # Alternatively, i could choose the larger data source by binding first and then:
 #  larger_source <- sort(table(c(pop_longitude$Method)), decreasing = T)[1] %>% names()
 #  pop_longitude <- pop_longitude %>% filter(Method == larger_source)
-pop_longitude <- pop_longitude %>% filter(Location %ni% pop_manual$Location)
+# pop_longitude <- pop_longitude %>% filter(Location %ni% pop_manual$Location)
+
 pop_longitude <- bind_rows(pop_longitude, pop_manual)
 
+pop_longitude <- pop_longitude %>%
+mutate(Area_km = case_when(
+         Area_km == 0 ~ NA_real_,
+         T ~ Area_km
+       )) %>%
+  group_by(Year, Location) %>%
+  fill(Area_km, Population, Country, .direction = "updown") %>%
+  ungroup() %>%
+  distinct(Location, Year, Population, .keep_all = T)
+
+```
+
+
+```{r}
 pop_growth <- pop_longitude %>% filter(Group == city) %>% select(-Area_km)
 if (in_oxford) pop_growth <- bind_rows(pop_growth, get_de_pop_growth(city, country))
 
 # Write pop_growth to data-sharing
 write_csv(pop_growth, "data-sharing/04-tabular-data/population-growth.csv")
-
-pop_capital <- read_xls("/Users/bennotkin/Documents/world-bank/crp/city-scans/03-multi-scan-materials/WUP2018-F13-Capital_Cities.xls", skip = 16)
-pop_capital %>% filter(str_detect(`Country or area`, nearby_countries_string))
+# 
+# pop_capital <- read_xls("/Users/bennotkin/Documents/world-bank/crp/city-scans/03-multi-scan-materials/WUP2018-F13-Capital_Cities.xls", skip = 16)
+# pop_capital %>% filter(str_detect(`Country or area`, nearby_countries_string))
 
 # Make pop_growth plot
 pop_min_year <- min(pop_growth$Year)
@@ -456,7 +471,9 @@ pop_growth %>% mutate(growth_pct = (Population - lag(Population))/lag(Population
 
 ### Population Density
 ```{r}
-density <- pop_longitude %>% slice_max(order_by = Year, by = Location)
+density <- pop_longitude %>%
+    filter(Area_km != 0 & !is.na(Area_km)) %>%
+    slice_max(order_by = Year, by = Location)
 
 # if (!in_oxford) {
 #   density <- bind_rows(density, data.frame(
@@ -469,6 +486,7 @@ density <- pop_longitude %>% slice_max(order_by = Year, by = Location)
 
 density$Density <- density$Population/density$Area_km
 density <- density %>% arrange(desc(Density))
+density <- density %>% mutate(Location = str_replace(Location, "Nur-Sultan", "Astana"))
 
 city_pop_density <- density[which(density$Location == city), "Density"]
 
@@ -493,7 +511,7 @@ density_plot <- density %>%
        y = bquote('Population density, people per '~km^2),
        x = "Population") +
   scale_y_continuous(labels = scales::label_comma(),
-                     expand = expansion(mult = c(0, .01))) +
+                     expand = expansion(mult = c(0, .03))) +
   scale_x_continuous(labels = scales::label_comma(),
                      # limits = c(0, ceiling(max(density$Population / 20)) * 20),
                      expand = expansion(mult = c(0, .01))) +
@@ -603,12 +621,12 @@ Reproductive age is percentage of female population that is of reproductive age
 
 ```{r}
 # WorldPop Age Groups
-age_file <- list.files("Stats")[!is.na(str_match(list.files("Stats"), ".*age_distribution.csv"))]
+age_file <- list.files("Stats")[!is.na(str_match(list.files("Stats"), ".*_demographics.csv"))]
 if (length(age_file) == 0) warning("No WorldPop age distribution file") else {
-  pop_dist_group_wp <- read_csv(paste0("Stats/", age_file), col_types = "fdd") %>% 
-    rename(Age_Bracket = age_group, Female = female, Male = male) %>%
-    pivot_longer(cols = c("Female", "Male"), names_to = "Sex", values_to = "Count") %>% 
-    mutate(Age_Bracket = forcats::fct_collapse(Age_Bracket, "0-4" = c("<1", "1-4"))) %>%
+  pop_dist_group_wp <- read_csv(paste0("Stats/", age_file), col_types = "ffd") %>% 
+    rename(Age_Bracket = age_group, Sex = sex, Count = population) %>%
+    mutate(Sex = fct_recode(Sex, "Female" = "f", "Male" = "m")) %>%
+    mutate(Age_Bracket = forcats::fct_collapse(Age_Bracket, "0-4" = c("0-1", "1-4"))) %>%
     group_by(Age_Bracket, Sex) %>% summarize(Count = sum(Count), .groups = "drop") %>%
     # mutate(Age_Bracket = factor(Age_Bracket, levels = unique(Age_Bracket))) %>%
     mutate(Percentage = Count/sum(Count)) %>%
