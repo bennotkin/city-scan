@@ -4,9 +4,11 @@ scan/Links/map_*
 scan/Links/oxford-*
 scan/Links/wsf-*
 scan/Links/world-pop-*
-scan/Links/darthmouth_flood_events.pdf
+scan/Links/darthmouth_flood_events*
 scan/Links/monthly-pv.png
-scan/Links/ngdc-earthquake-events.pdf
+scan/Links/ngdc-earthquake-events*
+scan/Links/ncei-cyclones*
+scan/Links/nasa-fwi*
 plots/*
 Stats/*
 Maps/*
