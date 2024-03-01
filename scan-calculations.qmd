@@ -4,6 +4,7 @@ output:
 ---
 
 ## Setup
+
 ```{r, echo = F, message = F}
 knitr::opts_chunk$set(echo = F, results = "asis")
 
@@ -22,14 +23,18 @@ librarian::shelf(
   rvest,
   units,
   terra,
+  yaml,
   dplyr
 )
 
 country_groups <- read_csv("https://raw.githubusercontent.com/compoundrisk/monitor/databricks/src/country-groups.csv")
-source("https://raw.githubusercontent.com/compoundrisk/monitor/databricks/src/fns/helpers.R")
+source("source/helpers.R")
+source("source/fns.R")
 tolatin <- function(x) stringi::stri_trans_general(x, id = "Latin-ASCII")
 normalize <- function(x, na.rm = T) {
-  return((x - min(x, na.rm = na.rm)) /(max(x, na.rm = na.rm)-min(x, na.rm = na.rm)))
+  minimum <- min(x, na.rm = na.rm)
+  maximum <- max(x, na.rm = na.rm)
+  return((x - minimum) / (maximum - minimum))
 }
 
 # Change the print type depending on whether document is run interactively or from `rmarkdown::render()`
@@ -53,21 +58,35 @@ print_text <- function(x, linebreaks = 2) {
 ```
 
 ```{r, echo = F}
+# Set directories
+city_dir <- file.path("mnt/", readLines("city-dir.txt"))
+user_input_dir <- file.path(city_dir, "01-user-input/")
+process_output_dir <- file.path(city_dir, "02-process-output/")
+stats_dir <- file.path(process_output_dir, "spatial")
+output_dir <- file.path(city_dir, "03-render-output/")
+data_sharing_dir <- file.path(output_dir, "data-sharing")
+
+# Set source file paths
+paths <- read_yaml("calculations/file-locations.yml")
+```
+
+```{r, echo = F}
+# Data Sharing
 # This chunk is separate from the setup chunk above because we don't want
 # the message suppressed 
 
-c("plots", "data-sharing", "data-sharing/02-TIFs",
-  "data-sharing/03-analysis-inputs", "data-sharing/03-analysis-inputs/flood-events", 
-  "data-sharing/03-analysis-inputs/earthquakes", "data-sharing/04-tabular-data") %>%
+c("plots", file.path(data_sharing_dir, c(
+    "02-TIFs", "03-analysis-inputs/flood-events",
+    "03-analysis-inputs/earthquakes", "04-tabular-data"))) %>%
   lapply(function(directory) {
-    if (!dir.exists(directory)) dir.create(directory) else {
+    if (!dir.exists(directory)) dir.create(directory, recursive = T) else {
       # message(paste0(directory, "/ directory already exists in ", getwd()))
 }
   }) %>% invisible()
 
-if (!dir.exists("data-sharing/AOI")) {
-file.copy(from = "AOI/", to = "data-sharing", recursive = T)
-file.rename("data-sharing/AOI", "data-sharing/01-AOI")
+if (!any(dir.exists(file.path(data_sharing_dir, c("AOI", "01-AOI"))))) {
+  file.copy(from = file.path(user_input_dir, "AOI"), to = data_sharing_dir, recursive = T)
+  file.rename(file.path(data_sharing_dir, "AOI"), file.path(data_sharing_dir, "01-AOI"))
 }
 
 message("To fill data-sharing/02-TIFs and data-sharing/03-analysis-inputs you will need to download and rename files from city_scan2. This is not yet a necessary step for all cities.")
@@ -75,18 +94,22 @@ message("To fill data-sharing/02-TIFs and data-sharing/03-analysis-inputs you wi
 
 ### User Input Variables
 ```{r, echo = F}
-source("user-inputs.R")
+# Read city-specific inputs
+city_params <- read_yaml(file.path(user_input_dir, "city_inputs.yml"))
+city <- city_params$city_name
+country <- city_params$country_name
+
 print_text(paste("City:", city), 1)
 print_text(paste("Country:", country), 1)
-print_text(paste("Manual benchmark cities:", paste_and(bm_cities_manual)), 1)
+print_text(paste("Manual benchmark cities:", paste_and(city_params$bm_cities_manual)), 1)
 
 # Is city in Oxford Economics?
-oxford_locations <- readr::read_csv("../../03-multi-scan-materials/oxford-locations.csv", col_types = "c")
+oxford_locations <- readr::read_csv(paths$oxford_file, col_types = "c")
 oxford_locations_in_country <- dplyr::filter(oxford_locations, Country == country)
 in_oxford <- city %in% oxford_locations_in_country$Location
 if (!in_oxford) {
   print_text(paste0(city, " is not in Oxford Economics. The included locations for ", country, " are ",
-                    paste_and(oxford_locations_in_country$Location),
+                    paste_and(unique(oxford_locations_in_country$Location)),
                     ". Is one of these an alternate name or spelling for ", city, "?"))
 }
 ```
@@ -95,52 +118,12 @@ if (!in_oxford) {
 title: "`r city` City Scan"
 ---
 
-### Rename maps & make sure all are included
-```{r}
-if (!any(str_detect(list.files("scan/Links"), "_admin.png"))) {
-  list.files("Maps") %>%
-    lapply(function(file) {
-      file.copy(paste0("Maps/", file), "scan/Links")
-    }) %>% invisible()
-}
-
-rename_command <- paste0("Rscript --vanilla rename-generic.R '", getwd(), "/scan/Links' ", map_file_prefices)
-for (x in rename_command) system(x)
-# system(paste0("magick ", getwd(), "/scan/Links/map_network_plot.png -trim -fuzz 30% -fill white -opaque '#111111' ", getwd(), "/scan/Links/map_network_plot_white.png"))
-
-# This checks which maps are missing. I could do the same for plots, but would need to be at end of document
-slide_list <- read_csv("slide-list.csv", col_types = "cccddcc")
-maps <- list.files("scan/links") %>% .[str_detect(., "^map_")]
-occasional_maps <- filter(slide_list, filename %in% maps & conditions == "occasional" & type == "map")
-
-if (nrow(occasional_maps > 0)) {
-  print_text("These maps exist. Make sure they are included in the InDesign.")
-  occasional_maps %>% select(slide, filename, warning_text)
-}
-
-missing_maps <- filter(slide_list, filename %ni% maps & type == "map" & slide != "Not shown")
-# Use the following to make a warning instead of printing a table
-# mutate(
-#   slide_number = paste(section, section_order, sep = "."),
-#   # gap = 27 - nchar(filename),
-#   slide = leading_zeros(substr(slide, 1, 10), length = 10, filler = " ", trailing = T),
-#   filename = leading_zeros(filename, length = 28, filler = " ", trailing = T),
-#   warning_message = paste0(slide, ": ", filename, warning_text),
-#   .keep = "none")
-# warning(paste0("missing maps:\n", paste(missing_maps$warning_message, collapse = "\n")))
-
-if (nrow(missing_maps) > 0) {
-  print_text("The following maps are not included. Should they be?")
-  missing_maps %>% select(slide, filename, warning_text)
-}
-```
-
 ## Area and climate zone
 
 ```{r}
 # Basic Info (Area, Climate)
 # Area
-aoi <- read_sf("AOI") %>%
+aoi <- read_sf(file.path(user_input_dir, "AOI")) %>%
   st_transform("EPSG:4326")
 area <- units::set_units(st_area(st_combine(aoi)), km^2)
 # Get area
@@ -149,7 +132,7 @@ print_text(paste("AOI Area:", round(area, 1), "sq km"))
 # Climate
 coords <- st_centroid(aoi) %>% st_coordinates() %>% suppressWarnings()
 names(coords) <- c("Lon", "Lat")       
-koeppen <- read_csv(koeppen_file, col_types = "ddc")
+koeppen <- read_csv(paths$koeppen_file, col_types = "ddc")
 koeppen_city <- subset(koeppen, between(Lon, coords["Lon"] - .5, coords["Lon"] + .5) &  
                          between(Lat, coords["Lat"] - .5, coords["Lat"] + .5)) %>%
   .$Cls %>% unique()
@@ -161,11 +144,11 @@ print_text(paste("Köppen climate classification:", koeppen_city, "(See https://
 # Defining the UN Data and citypopulation.de pop function because it is used as backup in Oxford and in Density
 get_un_pop_growth <- function(city, country = country) {
   # UN Data
-  if (!file.exists(undata_file)) {
-    warning(paste0("undata_file (", undata_file, ") does not exist."))
+  if (!file.exists(paths$undata_file)) {
+    warning(paste0("undata_file (", paths$undata_file, ") does not exist."))
     return(NULL)
   } else {
-    pop_growth_undata <- read_csv(undata_file,
+    pop_growth_undata <- read_csv(paths$undata_file,
                                   col_types = "cdccccccddc", n_max = 69490) %>%
       filter(`Country or Area` == country) %>%
       filter(Sex == "Both Sexes") %>%
@@ -235,7 +218,7 @@ Benchmark cities are selected as cities that are in neighboring countries and ha
 ```{r}
 # Read Data ----
 if (!exists("oxford_full")) oxford_full <-
-  read_csv(oxford_file,
+  read_csv(paths$oxford_file,
            col_types = "cccccccccdddddddddddddddddddddddddddddddddddddddddcllldlcclcc")
 # competitive_cities <- read_xlsx("/Users/bennotkin/Documents/world-bank/crp/City Scan onboard material/competitive_cities_master_dataset_2000_2015.xlsx", sheet = "Data")
 
@@ -256,7 +239,7 @@ if (length(pop) > 0) {
 
 # Select all cities in nearby countries
 nearby_cities <- oxford_locations %>%
-  subset(str_detect(tolower(Country), nearby_countries_string)) %>%
+  subset(str_detect(tolower(Country), city_params$nearby_countries_string)) %>%
   subset(Location != Country & !str_detect(Location, "Total")) %>%
   .$Location
 
@@ -276,8 +259,8 @@ bm_cities <- oxford_full %>%
   .$Location
 
 # Manualy select benchmark cities
-# bm_cities_manual <- c('Luanda', 'Kinshasa', 'Libreville', 'Yaound�', 'Bangui', 'N\'Djamena', 'Abuja', 'Juba')
-bm_cities <- c(bm_cities, bm_cities_manual) %>% unique() %>% which_not(city)
+# city_params$bm_cities_manual <- c('Luanda', 'Kinshasa', 'Libreville', 'Yaound�', 'Bangui', 'N\'Djamena', 'Abuja', 'Juba')
+bm_cities <- c(bm_cities, city_params$bm_cities_manual) %>% unique() %>% which_not(city)
 
 # Print table of population in benchmark cities (OUTPUT)
 print_text("Benchmark cities")
@@ -344,7 +327,7 @@ pop_longitude <- subset(oxford, Indicator == "Total population") %>%
     arrange(Group) %>% 
     subset(Year <= 2021 & !is.na(Population))
 
-bm_areas <- read_csv(oxford_areas_file, col_types = "ccd") %>%
+bm_areas <- read_csv(paths$oxford_areas_file, col_types = "ccd") %>%
   mutate(Location = str_to_title(Location)) %>%
   filter(Location %in% str_to_title(pop_longitude$Location)) %>%
   select(-Country)
@@ -362,7 +345,7 @@ pop_longitude <- left_join(pop_longitude, bm_areas, by = "Location")
 }
 
 # Pop from citypopulation.de
-non_oxford_cities <- which_not(c(city, bm_cities_manual), oxford$Location) %>% .[!duplicated(.)]
+non_oxford_cities <- which_not(c(city, city_params$bm_cities_manual), oxford$Location) %>% .[!duplicated(.)]
 if (length(non_oxford_cities) > 0) {
 non_oxford_pop <- non_oxford_cities %>%
   lapply(function(x) {
@@ -379,7 +362,7 @@ if (nrow(non_oxford_pop) > 0) pop_longitude <- bind_rows(pop_longitude, non_oxfo
 }
 
 # Pop from manual data entry file
-pop_manual <- read_csv("manual-data-entry/pop.csv", col_types = "ccddc") %>% mutate(Method = "Manual")
+pop_manual <- read_csv(file.path(user_input_dir, "manual-data-entry/pop.csv"), col_types = "ccddc") %>% mutate(Method = "Manual")
 # Here I choose to always go with the manual data over the citypop data
 # Alternatively, i could choose the larger data source by binding first and then:
 #  larger_source <- sort(table(c(pop_longitude$Method)), decreasing = T)[1] %>% names()
@@ -397,7 +380,6 @@ mutate(Area_km = case_when(
   fill(Area_km, Population, Country, .direction = "updown") %>%
   ungroup() %>%
   distinct(Location, Year, Population, .keep_all = T)
-
 ```
 
 
@@ -406,10 +388,10 @@ pop_growth <- pop_longitude %>% filter(Group == city) %>% select(-Area_km)
 if (in_oxford) pop_growth <- bind_rows(pop_growth, get_de_pop_growth(city, country))
 
 # Write pop_growth to data-sharing
-write_csv(pop_growth, "data-sharing/04-tabular-data/population-growth.csv")
+write_csv(pop_growth, file.path(data_sharing_dir, "04-tabular-data/population-growth.csv"))
 # 
-# pop_capital <- read_xls("/Users/bennotkin/Documents/world-bank/crp/city-scans/03-multi-scan-materials/WUP2018-F13-Capital_Cities.xls", skip = 16)
-# pop_capital %>% filter(str_detect(`Country or area`, nearby_countries_string))
+# pop_capital <- read_xls(paths$pop_capital_file, skip = 16)
+# pop_capital %>% filter(str_detect(`Country or area`, city_params$nearby_countries_string))
 
 # Make pop_growth plot
 pop_min_year <- min(pop_growth$Year)
@@ -621,9 +603,9 @@ Reproductive age is percentage of female population that is of reproductive age
 
 ```{r}
 # WorldPop Age Groups
-age_file <- list.files("Stats")[!is.na(str_match(list.files("Stats"), ".*_demographics.csv"))]
+age_file <- fuzzy_read(stats_dir, "demographics.csv", FUN = paste)
 if (length(age_file) == 0) warning("No WorldPop age distribution file") else {
-  pop_dist_group_wp <- read_csv(paste0("Stats/", age_file), col_types = "ffd") %>% 
+  pop_dist_group_wp <- read_csv(age_file), col_types = "ffd") %>% 
     rename(Age_Bracket = age_group, Sex = sex, Count = population) %>%
     mutate(Sex = fct_recode(Sex, "Female" = "f", "Male" = "m")) %>%
     mutate(Age_Bracket = forcats::fct_collapse(Age_Bracket, "0-4" = c("0-1", "1-4"))) %>%
@@ -1300,13 +1282,13 @@ if (in_oxford) {
 ## WSF
 ### Urban built-up area
 ```{r}
-if (!file.exists("Stats/WSF.xlsx")) {
+wsf_stats_file <- fuzzy_read(stats_dir, "wsf_stats.csv", FUN = paste)
+if (is.na(wsf_stats_file)) {
   warning("No WSF.xlsx file. Should there be? Check for different file name.")
 } else {
   # Urban built-up area ----
-  wsf <- read_xlsx("Stats/WSF.xlsx", sheet = "WSF") %>%
-    rename(Year = 1) %>%
-    select(Year, uba_km2 = any_of(c("AREA_sq_km", "cumulative sq km"))) %>%
+  wsf <- read_csv(wsf_stats_file, col_types = "id") %>%
+    select(Year = year, uba_km2 = any_of(c("AREA_sq_km", "cumulative sq km"))) %>%
     mutate(growth_pct = (uba_km2 / lag(uba_km2) - 1), growth_km2 = uba_km2 - lag(uba_km2))
   uba_plot <- wsf %>%
     ggplot +
@@ -1331,7 +1313,7 @@ if (!file.exists("Stats/WSF.xlsx")) {
   print_text(paste0("The city's built-up area grew from ", round(first_area, 2), " km^2 in ", first_year, " to ", round(latest_area, 2), " in ", latest_year, " for ", round(pct_growth, 2), "% growth"))
   
   print_paged_df(wsf)
-  write_csv(wsf, "data-sharing/04-tabular-data/urban-extent-and-change.csv")
+  write_csv(wsf, file.path(data_sharing_dir, "/04-tabular-data/urban-extent-and-change.csv"))
   # mean(head(wsf$growth, 10), na.rm = T)
   # mean(head(wsf$growth_km2, 10), na.rm = T)
   # 
@@ -1375,7 +1357,8 @@ if (!file.exists("Stats/WSF.xlsx")) {
 
 ### Landcover
 ```{r}
-lc <- read_xlsx("Stats/Landcover.xlsx", skip = 1,
+lc_file <- fuzzy_read(stats_dir, "landcover.csv")
+lc <- read_xlsx(lc_file, skip = 1,
                 col_names = c("Land Cover", "Value", "Count", "Percent")) %>%
   # remove_missing(na.rm = T) %>%
   filter(!is.na(`Land Cover`)) %>%
@@ -1488,7 +1471,8 @@ print_text(paste0("The next largest land classes are ", lc2, " (", lc2_pct, "%) 
 
 ### Elevation
 ```{r}
-elevation <- read_xlsx("Stats/Elevaton_Slope.xlsx", sheet = "Elevation") 
+elevation_file <- fuzzy_read(stats_dir, "elevation.csv")
+elevation <- read_csv(elevation_file) 
 
 elevation2 <- elevation %>% subset(!is.na(legend)) %>%
   mutate(Percent = percent,
@@ -1570,7 +1554,8 @@ ggsave("plots/wsf-elevation-pieplot.png", device = "png",
 
 ### Slope
 ```{r}
-slope <- read_xlsx("Stats/Elevaton_Slope.xlsx", sheet = "Slope") 
+slope_file <- fuzzy_read(stats_dir, "slope.csv")
+slope <- read_csv(slope_file) 
 
 slope2 <- slope %>% subset(!is.na(legend)) %>%
   mutate(Percent = percent,
@@ -1594,12 +1579,14 @@ ggsave("plots/wsf-slope-pieplot.png", device = "png",
 ## Urban Flooding
 ```{r}
 flood_string <- function(flood_type) {
-  osmpt <- read_xls(paste0("Stats/", flood_type, "_osmpt.xls"))[,1:4] %>% distinct() %>%
+  osmpt <- read_xls(file.path(stats_dir, paste0(flood_type, "_osmpt.xls")))[,1:4] %>%
+    distinct() %>%
     tryCatch(error = function(e) {
-      warning(paste0("File `Stats/", flood_type, "_osmpt.xls does not exist. Is it named differently?<br><br>"))
+      warning(paste0("File `", stats_dir, "/", flood_type, "_osmpt.xls` does not exist. Is it named differently?<br><br>"))
       return(NULL)
     })
-  major_roads <- read_xls(paste0("Stats/", flood_type, "_majorroad.xls")) %>% tryCatch(error = function(e) return(data.frame(OID = 0, gridcode = 0, LENGTH = 0, PERCENTAGE = 0)))
+  major_roads <- read_xls(file.path(stats_dir, paste0(flood_type, "_majorroad.xls"))) %>%
+    tryCatch(error = function(e) return(data.frame(OID = 0, gridcode = 0, LENGTH = 0, PERCENTAGE = 0)))
   
   if (is.null(osmpt)) return("No OSMPT data.") else {
     roads_pct <- major_roads$PERCENTAGE[major_roads$gridcode == 1] %>% round(0)
@@ -1627,7 +1614,8 @@ flood_string <- function(flood_type) {
 }
 
 gather_flood_data <- function(flood_type) {
-  df <- read_xlsx("Stats/WSF.xlsx", sheet = toupper(flood_type)) %>%
+  
+  df <- read_xlsx(file.path(stats_dir, "WSF.xlsx"), sheet = toupper(flood_type)) %>%
     select(Year = Value, uba_km2 = AREA_sq_km) %>%
     mutate(growth = (uba_km2 / lag(uba_km2) - 1))
   df <- left_join(df, wsf, by = "Year", suffix = c("", "_wsf")) %>%
@@ -1636,7 +1624,7 @@ gather_flood_data <- function(flood_type) {
   return(df)
 }
 flood_pop_area <- function(flood_type) {
-  read_xls(paste0("Stats/", flood_type, "_pop_area.xls")) %>% 
+  read_xls(file.path(stats_dir, paste0(flood_type, "_pop_area.xls"))) %>% 
     arrange(VALUE) %>% 
     rename(Area = VALUE_1) %>%
     # {.$Area[2] / .$Area[1]}
@@ -1650,7 +1638,7 @@ flood_pop_area <- function(flood_type) {
 
 ### Fluvial
 ```{r}
-if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
+if (!file.exists(file.path(stats_dir, "WSF.xlsx")) warning("No WSF.xlsx file.") else {
   fu <- gather_flood_data("fu")
   
   fu_plot <- fu %>%
@@ -1691,7 +1679,7 @@ print_text(flood_string("fu"))
 
 ### Pluvial
 ```{r}
-if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
+if (!file.exists(file.path(stats_dir, "WSF.xlsx"))) warning("No WSF.xlsx file.") else {
   pu <- gather_flood_data("pu")
   pu_plot <- pu %>%
     ggplot +
@@ -1734,7 +1722,7 @@ print_text(flood_string("pu"))
 
 ### Combined Fluvial & Pluvial
 ```{r}
-if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
+if (!file.exists(file.path(stats_dir, "WSF.xlsx"))) warning("No WSF.xlsx file.") else {
   pufu <- gather_flood_data("comb")
   pufu <- bind_rows(
     fu %>% mutate(type = "River"),
@@ -1790,10 +1778,10 @@ print_text(flood_string("comb"))
 c("dbf", "prj", "shp", "shx") %>% lapply(function(suffix) {
   curl_download(
     url = paste0("https://floodobservatory.colorado.edu/temp/FloodArchive_region.", suffix),
-    destfile = paste0(flood_archive_file, "/FloodArchive_region.", suffix))
+    destfile = paste0(paths$flood_archive_file, "/FloodArchive_region.", suffix))
 })
 
-flood_archive <- read_sf(flood_archive_file)
+flood_archive <- read_sf(paths$flood_archive_file)
 aoi <- read_sf("AOI") %>% st_transform("EPSG:4326")
 
 flood_archive <- st_make_valid(flood_archive)
@@ -1877,7 +1865,7 @@ ggplot(flood_text) +
 ggsave("plots/darthmouth_flood_events.pdf", device = "pdf",
        width = 20, height = 5.833, units = "in", dpi = "print")
 
-st_write(flood_archive, "data-sharing/03-analysis-inputs/flood-events/flood-events.shp", append = F)
+st_write(flood_archive, file.path(data_sharing_dir, "03-analysis-inputs/flood-events/flood-events.shp"), append = F)
 ```
 
 ## Earthquakes
@@ -2004,7 +1992,7 @@ ggplot(eq_text) +
 ggsave("plots/ngdc-earthquake-events.pdf", device = "pdf",
        width = 20, height = 5.833, units = "in", dpi = "print")
 
-st_write(eq_near, "data-sharing/03-analysis-inputs/earthquakes/earthquakes-500km.shp", append = F)
+st_write(eq_near, file.path(data_sharing_dir, "03-analysis-inputs/earthquakes/earthquakes-500km.shp"), append = F)
 
 # bind_cols(eq_text, eq_text$geometry %>% st_coordinates()) %>%
 #   bind_cols(distance = st_distance(city_point, eq_text) %>% as.vector()) %>%
@@ -2027,7 +2015,7 @@ st_write(eq_near, "data-sharing/03-analysis-inputs/earthquakes/earthquakes-500km
 #     FUN = read_sf) %>%
 #   st_transform("EPSG:4326")
 
-cyclones <- read_sf(cyclone_archive_file) %>%
+cyclones <- read_sf(paths$cyclone_archive_file) %>%
   st_transform("EPSG:4326")
 # plot(cyclones)
 

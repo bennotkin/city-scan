@@ -1,0 +1,18 @@
+# Oxford Economics
+oxford_file: "mnt/multi-scan-materials/Oxford Global Cities Data.csv"
+oxford_areas_file: "mnt/multi-scan-materials/oxford-economics-areas.csv"
+
+# UN Data Population
+undata_file: "mnt/multi-scan-materials/undata-pop.csv"
+
+# Koeppen Climate Classification
+koeppen_file: "mnt/multi-scan-materials/Koeppen-Geiger-ASCII.csv"
+
+# Flood Archive
+flood_archive_file: "mnt/multi-scan-materials/flood-archive"
+
+# Cyclone Archive
+cyclone_archive_file: "mnt/multi-scan-materials/IBTrACS-tropical-cyclones"
+
+# Capital populations
+pop_capital_file: "mnt/multi-scan-materials/WUP2018-F13-Capital_Cities.xls"
