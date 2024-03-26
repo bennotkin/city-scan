@@ -104,7 +104,7 @@ print_text(paste("Country:", country), 1)
 print_text(paste("Manual benchmark cities:", paste_and(city_params$bm_cities_manual)), 1)
 
 # Is city in Oxford Economics?
-oxford_locations <- readr::read_csv(paths$oxford_file, col_types = "c")
+oxford_locations <- readr::read_csv(paths$oxford_locations_file, col_types = "c")
 oxford_locations_in_country <- dplyr::filter(oxford_locations, Country == country)
 in_oxford <- city %in% oxford_locations_in_country$Location
 if (!in_oxford) {
@@ -163,24 +163,14 @@ get_un_pop_growth <- function(city, country = country) {
 get_de_pop_growth <- function(city, country = country) {
   # citypopulation.de
   url <- paste0("https://www.citypopulation.de/en/", str_replace_all(tolower(country), " ", ""), "/cities/")
-  de <- read_html(url) %>%
-    html_node("section#citysection") %>%
-    html_node("table") %>%
-    html_table()
-  
-  if (!any(str_detect(tolatin(de$Name), tolatin(city)))) {
+  table_ids = c("citysection", "largecities", "adminareas")
+  for (id in table_ids) {
     de <- read_html(url) %>%
-      html_node("section#largecities") %>%
+      html_node("section#citysection") %>%
       html_node("table") %>%
       html_table()
-  }
-  
-  if (!any(str_detect(tolatin(de$Name), tolatin(city)))) {
-    de <- read_html(url) %>%
-      html_node("section#adminareas") %>%
-      html_node("table") %>%
-      html_table()
-  }
+      if (any(str_detect(tolatin(de$Name), tolatin(city)))) break
+    }
   
   pop_growth_de <- de %>%
     select(Location = Name, contains("Population"), Area = starts_with("Area")) %>%
@@ -364,7 +354,7 @@ if (nrow(non_oxford_pop) > 0) pop_longitude <- bind_rows(pop_longitude, non_oxfo
 # Pop from manual data entry file
 pop_manual <- read_csv(file.path(user_input_dir, "manual-data-entry/pop.csv"), col_types = "ccddc") %>% mutate(Method = "Manual")
 # Here I choose to always go with the manual data over the citypop data
-# Alternatively, i could choose the larger data source by binding first and then:
+# Alternatively, I could choose the larger data source by binding first and then:
 #  larger_source <- sort(table(c(pop_longitude$Method)), decreasing = T)[1] %>% names()
 #  pop_longitude <- pop_longitude %>% filter(Method == larger_source)
 # pop_longitude <- pop_longitude %>% filter(Location %ni% pop_manual$Location)

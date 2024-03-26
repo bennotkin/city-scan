@@ -1,5 +1,6 @@
 # Oxford Economics
 oxford_file: "mnt/multi-scan-materials/Oxford Global Cities Data.csv"
+oxford_locations_file: "mnt/multi-scan-materials/oxford-locations.csv"
 oxford_areas_file: "mnt/multi-scan-materials/oxford-economics-areas.csv"
 
 # UN Data Population
