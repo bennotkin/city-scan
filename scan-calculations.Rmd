@@ -180,23 +180,13 @@ get_un_pop_growth <- function(city, country = country) {
 get_de_pop_growth <- function(city, country = country) {
   # citypopulation.de
   url <- paste0("https://www.citypopulation.de/en/", str_replace_all(tolower(country), " ", ""), "/cities/")
-  de <- read_html(url) %>%
+  table_ids = c("citysection", "largecities", "adminareas")
+  for (id in table_ids) {
+    de <- read_html(url) %>%
     html_node("section#citysection") %>%
-    html_node("table") %>%
-    html_table()
-  
-  if (!any(str_detect(tolatin(de$Name), tolatin(city)))) {
-    de <- read_html(url) %>%
-      html_node("section#largecities") %>%
       html_node("table") %>%
       html_table()
-  }
-  
-  if (!any(str_detect(tolatin(de$Name), tolatin(city)))) {
-    de <- read_html(url) %>%
-      html_node("section#adminareas") %>%
-      html_node("table") %>%
-      html_table()
+      if (any(str_detect(tolatin(de$Name), tolatin(city)))) break
   }
   
   pop_growth_de <- de %>%
