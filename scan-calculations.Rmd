@@ -1365,8 +1365,8 @@ if (!file.exists("Stats/WSF.xlsx")) {
 
 ### Landcover
 ```{r}
-lc <- read_xlsx("Stats/Landcover.xlsx", skip = 1,
-                col_names = c("Land Cover", "Value", "Count", "Percent")) %>%
+lc <- read_csv(str_subset(list.files("Stats", full = T), "lc"), col_types = "cd") %>%
+  rename(`Land Cover` = `Land Cover Type`, Count = `Pixel Count`) %>%
   # remove_missing(na.rm = T) %>%
   filter(!is.na(`Land Cover`)) %>%
   mutate(Percent = Count/sum(Count)) %>%
@@ -1377,15 +1377,15 @@ print_paged_df(lc)
 # lc %>% arrange(desc(Percent)) %>% View()
 
 lc_colors <- c(
-  "tree cover" = "#397e48",
-  "built-up" = "#c4281b",
-  "grassland" = "#88af52",
-  "bare" = "#a59b8f",
-  "cropland" = "#e49634",
-  "water bodies" = "#429bdf",
-  "shrubland" = "#dfc25a",
-  "herbaceous wetland" = "#7d87c4",
-  "mangroves" = "#00cf75")
+  "Tree cover" = "#397e48",
+  "Built-up" = "#c4281b",
+  "Grassland" = "#88af52",
+  "Bare / sparse vegetation" = "#a59b8f",
+  "Cropland" = "#e49634",
+  "Permanent water bodies" = "#429bdf",
+  "Shrubland" = "#dfc25a",
+  "Herbaceous wetland" = "#7d87c4",
+  "Mangroves" = "#00cf75")
 
 # lc %>%
 #   ggplot() +
@@ -1478,12 +1478,12 @@ print_text(paste0("The next largest land classes are ", lc2, " (", lc2_pct, "%) 
 
 ### Elevation
 ```{r}
-elevation <- read_xlsx("Stats/Elevaton_Slope.xlsx", sheet = "Elevation") 
+elevation <- read_csv(str_subset(list.files("Stats", full = T), "elevation"), col_types = "cd")
 
-elevation2 <- elevation %>% subset(!is.na(legend)) %>%
+elevation2 <- elevation %>% subset(!is.na(Bin)) %>%
   mutate(Percent = percent,
-         Elevation = as.numeric(str_replace(legend, "-.*", "")),
-         legend = factor(legend, levels = legend))
+         Elevation = as.numeric(str_replace(Bin, "-.*", "")),
+         legend = factor(Bin, levels = Bin))
 
 # elevation2 %>%
 #   ggplot() +
@@ -1501,7 +1501,7 @@ elevation2 <- elevation %>% subset(!is.na(legend)) %>%
 #        y = "Percent of Urban Area",
 #        x = "Elevation (m)")
 
-elevation_names <- elevation2 %>% arrange(Elevation) %>% .$legend
+elevation_names <- elevation2$legend
 elevation_colors <- c(
   "#f5c4c0",
   "#f19bb4",
@@ -1560,7 +1560,8 @@ ggsave("plots/wsf-elevation-pieplot.png", device = "png",
 
 ### Slope
 ```{r}
-slope <- read_xlsx("Stats/Elevaton_Slope.xlsx", sheet = "Slope") 
+slope <- read_csv(str_subset(list.files("Stats", full = T), "slope"), col_types = "cdd") %>%
+  rename(legend = Bin)
 
 slope2 <- slope %>% subset(!is.na(legend)) %>%
   mutate(Percent = percent,
