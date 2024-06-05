@@ -277,7 +277,6 @@ oxford_full %>%
   mutate(`2021` = `2021` * 1000) %>%
   arrange(Location)
 
-
 # Print table of population of nearby cities not in benchmark list (OUTPUT)
 print_text("Nearby non-benchmark cities")
 oxford_full %>%
@@ -387,13 +386,12 @@ mutate(Area_km = case_when(
   fill(Area_km, Population, Country, .direction = "updown") %>%
   ungroup() %>%
   distinct(Location, Year, Population, .keep_all = T)
-
 ```
-
 
 ```{r}
 pop_growth <- pop_longitude %>% filter(Group == city) %>% select(-Area_km)
-if (in_oxford) pop_growth <- bind_rows(pop_growth, get_de_pop_growth(city, country))
+# if (in_oxford) pop_growth <- bind_rows(pop_growth, get_de_pop_growth(city, country)) # Why did I want this? Was it supposed to be !in_oxford?
+pop_growth <- arrange(pop_growth, Year)
 
 # Write pop_growth to data-sharing
 write_csv(pop_growth, "data-sharing/04-tabular-data/population-growth.csv")
