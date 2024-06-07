@@ -375,7 +375,7 @@ pop_manual <- read_csv("manual-data-entry/pop.csv", col_types = "ccddc") %>% mut
 #  pop_longitude <- pop_longitude %>% filter(Method == larger_source)
 # pop_longitude <- pop_longitude %>% filter(Location %ni% pop_manual$Location)
 
-pop_longitude <- bind_rows(pop_longitude, pop_manual)
+if (nrow(pop_manual) > 0) pop_longitude <- bind_rows(pop_longitude, pop_manual)
 
 pop_longitude <- pop_longitude %>%
 mutate(Area_km = case_when(
@@ -823,7 +823,7 @@ if (in_oxford) {
     group_by(Group, Location) %>%
     mutate(Growth = Value / lag(Value) - 1) %>%
     # slice_max(Year, n = 20) %>%
-    subset(between(Year, 2010, 2021)) %>%
+    subset(between(Year, 2000, 2021)) %>%
     summarize(`Employment Growth` = mean(Growth, na.rm = T), .groups = "drop") %>%
     arrange(desc(`Employment Growth`))
   print_text("Employment growth from 2000 to 2021")
@@ -834,6 +834,7 @@ if (in_oxford) {
     subset(between(Year, 2000, 2021)) %>%
     group_by(Group, Location) %>%
     mutate(Growth = Value / lag(Value) - 1)
+  print_text("Employment growth in focus city for each year")
   filter(emp_growth_years, Location == city) %>% print_paged_df()
   gdp_growth <- oxford %>% subset(Indicator == "GDP, real, US$ - Total") %>%
     pivot_longer(cols = contains("20"), values_to = "Value", names_to = "Year") %>%
@@ -842,8 +843,8 @@ if (in_oxford) {
     group_by(Group, Location) %>%
     mutate(Growth = Value / lag(Value) - 1) %>%
     # slice_max(Year, n = 10) %>%
-    filter(between(Year, 2010, 2021)) %>%
-    summarize(`GDP Growth` = mean(Growth), .groups = "drop") %>%
+    filter(between(Year, 2000, 2021)) %>%
+    summarize(`GDP Growth` = mean(Growth, na.rm = T), .groups = "drop") %>%
     arrange(desc(`GDP Growth`))
   gdp_growth_years <- oxford %>% subset(Indicator == "GDP, real, US$ - Total") %>%
     pivot_longer(cols = contains("20"), values_to = "Value", names_to = "Year") %>%

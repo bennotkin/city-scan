@@ -1,4 +1,4 @@
-type,filename,slide,section,section_order,conditions,warning_text
+﻿type,filename,slide,section,section_order,conditions,warning_text
 map,map_network_plus_building_footprints.png,Title,0,1,all,
 map,map_admin.png,Basic City Information,2,1,all,Check if map name includes 'AOI'
 plot,oxford-pop-density-scatter.png,Population Growth & Density,3,1,all,
@@ -64,14 +64,13 @@ map,map_WSF_85_95_05.png,Not shown,NA,NA,none,
 map,map_WSF_85_95.png,Not shown,NA,NA,none,
 map,map_WSF_85.png,Not shown,NA,NA,none,
 map,map_Liquefaction.png,Liquefaction Susceptibility,7,17,all,
-map,map_burnability,Burnability,7,20,all,
-map,map_NDMI.png,Moisture,7,21,all,
+map,map_LC_burnability.png,Burnability,7,20,all,
+map,map_NDMI.png,Drought,7,21,all,
 map,map_burnt_area.png,Historical Burnt Area and FWI,7,22,all,
 plot,nasa_fwi.png,Fire Weather Index,7,22,all,
 plot,oxford-gdp-per-capita.png,Not shown,NA,NA,none,
 plot,oxford-household-incomes-area.png,Not shown,NA,NA,none,
 plot,oxford-household-incomes-bar.png,Not shown,NA,NA,none,
-plot,fwi.png,Fire Weather Index,7,23,all,
 map,map_pop_slr_RL10_ssp245.png,Sea Level Rise,7,11,coastal,Is city coastal?
 map,map_pop_slr_RL10_ssp585.png,Sea Level Rise,7,11,coastal,Is city coastal?
 map,map_pop_slr_ssp245.png,Sea Level Rise,7,11,costal,Is city coastal?
