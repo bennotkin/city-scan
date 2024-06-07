@@ -40,3 +40,6 @@ flood_archive_file <- "../../03-multi-scan-materials/flood-archive"
 
 # Cyclone Archive
 cyclone_archive_file <- "../../03-multi-scan-materials/IBTrACS-tropical-cyclones"
+
+# FWI Global Dataset
+fwi_directory <- "../../wildfire-exploration.nosync/source-data.nosync/nasa-fwi/"
