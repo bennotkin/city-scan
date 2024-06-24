@@ -22,7 +22,9 @@ librarian::shelf(
   rvest,
   units,
   terra,
-  dplyr
+  dplyr,
+  glue,
+  purrr
 )
 
 country_groups <- read_csv("https://raw.githubusercontent.com/compoundrisk/monitor/databricks/src/country-groups.csv")
@@ -35,7 +37,7 @@ normalize <- function(x, na.rm = T) {
 # Change the print type depending on whether document is run interactively or from `rmarkdown::render()`
 # This is because a single function (such as `if(in_oxford)` can only print one result)
 # from_render is defined in render-current-scans.R
-# when rendering, must also set results to "asis" if ysing print_paged_df
+# when rendering, must also set results to "asis" if using print_paged_df
 interactive_run <- if (exists("from_render")) F else T
 results_type <- if (!interactive_run) "asis" else "markup"
 
@@ -226,8 +228,9 @@ Benchmark cities are selected as cities that are in neighboring countries and ha
 # Read Data ----
 if (!exists("oxford_full")) oxford_full <-
   read_csv(oxford_file,
-           col_types = "cccccccccdddddddddddddddddddddddddddddddddddddddddcllldlcclcc")
-# competitive_cities <- read_xlsx("/Users/bennotkin/Documents/world-bank/crp/City Scan onboard material/competitive_cities_master_dataset_2000_2015.xlsx", sheet = "Data")
+           col_types = "cccccccccdddddddddddddddddddddddddddddddddddddddddcllldlcclcc") # %>%
+  # To rename a city (e.g., we did a scan for "Sarbagita" which is "Denpasar" in Oxford)
+  # mutate(Location = case_when(Location == "Denpasar" ~ "Sarbagita", T ~ Location))
 
 pop <- oxford_full %>%
   subset(Location == city & Indicator == "Total population", select = `2021`) %>%
@@ -245,6 +248,7 @@ if (length(pop) > 0) {
 }
 
 # Select all cities in nearby countries
+nearby_countries_string <- paste0(nearby_countries_string, "|", tolower(country))
 nearby_cities <- oxford_locations %>%
   subset(str_detect(tolower(Country), nearby_countries_string)) %>%
   subset(Location != Country & !str_detect(Location, "Total")) %>%
@@ -391,7 +395,9 @@ mutate(Area_km = case_when(
 ```{r}
 pop_growth <- pop_longitude %>% filter(Group == city) %>% select(-Area_km)
 # if (in_oxford) pop_growth <- bind_rows(pop_growth, get_de_pop_growth(city, country)) # Why did I want this? Was it supposed to be !in_oxford?
-pop_growth <- arrange(pop_growth, Year)
+pop_growth <- arrange(pop_growth, Year) # %>%
+  # For when we want to plot multiple components to the city population
+  mutate(Group = case_when(Location == "Sarbagita" ~ "Combined", T ~ "Other"))
 
 # Write pop_growth to data-sharing
 write_csv(pop_growth, "data-sharing/04-tabular-data/population-growth.csv")
@@ -410,42 +416,50 @@ pop_growth_plot <- ggplot(pop_growth, aes(x = Year, y = Population, group = Loca
     breaks = if (pop_max_year - pop_min_year > 15) seq(1900,2025, by = 5) else seq(1900, 2025, by = 2),
     minor_breaks = seq(pop_min_year, pop_max_year, 1)) + 
   scale_y_continuous(limits = c(0, max(pop_growth$Population)), labels = scales::comma, expand = expansion(c(0, .1))) +    
-  #   scale_color_manual(values = hues) +
   theme_minimal() +
   labs(title = paste0(city, " Population Growth, ", pop_min_year, "-", pop_max_year)) +
-  theme(axis.line = element_line(linewidth = .5, color = "black"),
-        panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
-        panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray"))
-# legend.position = "bottom")
+  theme(
+    axis.line = element_line(linewidth = .5, color = "black"),
+    panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
+    panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray"))
+  # For when we want to plot multiple components to the city population
+  # scale_color_manual(values = c(Combined = "black", Other = "dark grey")) +
+  # ggrepel::geom_text_repel(
+  #   data = slice_max(pop_growth, by = Location, order_by = Year), aes(label = Location),
+  #   segment.color = NA, hjust = 0, nudge_x = .5, direction = "y") +
+  # theme(legend.position = "none")
 ggsave("plots/oxford-pop-growth.png", plot = pop_growth_plot, device = "png",
        width = 8, height = 5, units = "in", dpi = "print")
 
 # Print pop growth plot (OUTPUT)
 pop_growth_plot
 
-pop_1 <- pop_growth$Population[1]
-pop_last <- tail(pop_growth$Population, 1)
-year_1 <- pop_growth$Year[1]
-year_last <- tail(pop_growth$Year, 1)
-pct_growth <- ((pop_last - pop_1)/pop_1) %>% round(3)
-avg_growth <- (1 + pct_growth)^(1/(year_last - year_1)) - 1
-# vstring(city, "'s population increased by", pct_growth%, "from", pop_1, "in", year_1, "to", pop_last, "in", year_last, "at an average annual rate of", avg_growth, "%")
-paste0(
-  city,
-  "'s population increased by ", 
-  scales::percent(pct_growth, big.mark = ","),
-  " from ", scales::label_comma()(pop_1), " in ", year_1, " to ", scales::comma(pop_last), " in ", year_last,
-  ", at an average annual rate of ", scales::percent(avg_growth, accuracy = 0.1)) %>%
-  print_text()
+# The tibble and pmap approach is in case pop_growth includes multiple components
+pop_growth_summary <- pop_growth %>%
+  arrange(Year) %>%
+  summarize(.by = Location, 
+    year_1 = head(Year, 1),
+    pop_1 = head(Population, 1),
+    year_last = tail(Year, 1),
+    pop_last = tail(Population, 1),
+    span = year_last - year_1,
+    change = pop_last - pop_1,
+    change_pct = scales::percent(pop_last/pop_1 - 1, accuracy = 0.1),
+    growth_rate = scales::percent((pop_last/pop_1)^(1/span) - 1,  accuracy = 0.1))
+print_paged_df(pop_growth_summary)
+pmap(pop_growth_summary, \(...) {
+  row <- tibble(...)
+  glue("{row$Location}'s population grew by {row$change_pct} from {scales::comma(row$pop_1)} in {row$year_1} to {scales::comma(row$pop_last)} in {row$year_last}")
+}) %>% cat(sep = "\n") %>% print_text()
 
 # Print pop growth tables (OUTPUT)
 print_text("Yearly population, sorted by absolute growth")
 pop_growth %>% mutate(growth = Population - lag(Population)) %>%
-  arrange(desc(growth)) 
+  arrange(Location, desc(growth)) 
 print_text("Yearly population, sorted by percentage growth")
 
 pop_growth %>% mutate(growth_pct = (Population - lag(Population))/lag(Population)) %>%
-  arrange(desc(growth_pct)) 
+  arrange(Location, desc(growth_pct)) 
 # if (in_oxford) {
 #   print(paste(
 #     "Average growth rate 2000-2010:",
@@ -833,7 +847,11 @@ if (in_oxford) {
     mutate(Group, Location, Year = as.numeric(Year), Value, .keep = "used") %>%
     subset(between(Year, 2000, 2021)) %>%
     group_by(Group, Location) %>%
-    mutate(Growth = Value / lag(Value) - 1)
+    mutate(Growth = Value / lag(Value) - 1) %>%
+    # slice_max(Year, n = 10) %>%
+    filter(between(Year, 2000, 2021)) %>%
+    summarize(`Employment Growth` = mean(Growth, na.rm = T), .groups = "drop") %>%
+    arrange(desc(`Employment Growth`))
   print_text("Employment growth in focus city for each year")
   filter(emp_growth_years, Location == city) %>% print_paged_df()
   gdp_growth <- oxford %>% subset(Indicator == "GDP, real, US$ - Total") %>%
@@ -890,7 +908,7 @@ multi_city_pop_plot <- ggplot(pop_longitude) +
         axis.line = element_line(linewidth = .5, color = "black"),
         legend.position = "none") +
   labs(title = paste("Population of", city, "and benchmark cities"), x = "") +
-  scale_y_continuous(labels = scales::label_comma(), expand = c(0,0)) +
+  scale_y_continuous(limits = c(0, NA), labels = scales::label_comma(), expand = c(0,0)) +
   scale_x_continuous(breaks = seq(min(pop_longitude$Year), 2021, 5), minor_breaks = seq(2000,2030,1), expand = c(0,0)) +
   # geom_dl(aes(label = Location), method = list(dl.combine("first.points", "last.points")), cex = 0.8) 
   geom_text_repel(data = pop_longitude %>% slice_max(order_by = Year, by = Location), aes(label = Location, x = 2021, y = `Population`, color = Group), 
@@ -901,7 +919,6 @@ ggsave("plots/oxford-pop_line.png", device = "png",
 # print_paged_df(pop_longitude)
 ggplot2:::print.ggplot(multi_city_pop_plot)
 ```
-
 
 ```{r}
 if (in_oxford) {
@@ -944,7 +961,7 @@ if (in_oxford) {
           axis.line = element_line(linewidth = .5, color = "black"),
           legend.position = "none") +
     labs(title = paste("Employment of", city, "and benchmark cities"), x = "") +
-    scale_y_continuous(labels = scales::label_comma(), expand = c(0,0)) +
+    scale_y_continuous(limits = c(0, NA), labels = scales::label_comma(), expand = c(0,0)) +
     scale_x_continuous(breaks = seq(min(emp_longitude$Year), 2021, 5), minor_breaks = seq(2000,2030,1), limits = c(min(emp_longitude$Year), 2028), expand = c(0,0)) +
     # geom_dl(aes(label = Location), method = list(dl.combine("first.points", "last.points")), cex = 0.8) 
     geom_text_repel(data = subset(emp_longitude, Year == 2021), aes(label = Location, x = 2021, y = `Total employed`, color = Group), 
@@ -1000,7 +1017,7 @@ if (in_oxford) {
           axis.line = element_line(linewidth = .5, color = "black"),
           legend.position = "none") +
     labs(title = paste("GDP of", city, "and benchmark cities"), x = "") +
-    scale_y_continuous(labels = scales::label_dollar(), expand = c(0,0)) +
+    scale_y_continuous(limits = c(0, NA), labels = scales::label_dollar(), expand = c(0,0)) +
     scale_x_continuous(
       breaks = seq(min(gdp_longitude$Year), 2021, 5),
       minor_breaks = seq(2000,2030,1),
@@ -1290,11 +1307,12 @@ if (in_oxford) {
 ## WSF
 ### Urban built-up area
 ```{r}
-if (!file.exists("Stats/WSF.xlsx")) {
+wsf_file <- str_subset(list.files("Stats", full.names = T), "WSF") 
+if (!file.exists(wsf_file)) {
   warning("No WSF.xlsx file. Should there be? Check for different file name.")
 } else {
   # Urban built-up area ----
-  wsf <- read_xlsx("Stats/WSF.xlsx", sheet = "WSF") %>%
+  wsf <- read_xlsx(wsf_file, sheet = "WSF") %>%
     rename(Year = 1) %>%
     select(Year, uba_km2 = any_of(c("AREA_sq_km", "cumulative sq km"))) %>%
     mutate(growth_pct = (uba_km2 / lag(uba_km2) - 1), growth_km2 = uba_km2 - lag(uba_km2))
@@ -1481,8 +1499,7 @@ print_text(paste0("The next largest land classes are ", lc2, " (", lc2_pct, "%) 
 elevation <- read_csv(str_subset(list.files("Stats", full = T), "elevation"), col_types = "cd")
 
 elevation2 <- elevation %>% subset(!is.na(Bin)) %>%
-  mutate(Percent = percent,
-         Elevation = as.numeric(str_replace(Bin, "-.*", "")),
+  mutate(Elevation = as.numeric(str_replace(Bin, "-.*", "")),
          legend = factor(Bin, levels = Bin))
 
 # elevation2 %>%
@@ -1564,8 +1581,7 @@ slope <- read_csv(str_subset(list.files("Stats", full = T), "slope"), col_types 
   rename(legend = Bin)
 
 slope2 <- slope %>% subset(!is.na(legend)) %>%
-  mutate(Percent = percent,
-         Slope = as.numeric(str_replace(legend, "[-+].*", "")),
+  mutate(Slope = as.numeric(str_replace(legend, "[-+].*", "")),
          legend = factor(legend, levels = legend))
 
 slope_names <- slope2 %>% arrange(Slope) %>% .$legend
@@ -1618,7 +1634,8 @@ flood_string <- function(flood_type) {
 }
 
 gather_flood_data <- function(flood_type) {
-  df <- read_xlsx("Stats/WSF.xlsx", sheet = toupper(flood_type)) %>%
+  wsf_file <- str_subset(list.files("Stats", full.names = T), "WSF") 
+  df <- read_xlsx(wsf_file, sheet = toupper(flood_type)) %>%
     select(Year = Value, uba_km2 = AREA_sq_km) %>%
     mutate(growth = (uba_km2 / lag(uba_km2) - 1))
   df <- left_join(df, wsf, by = "Year", suffix = c("", "_wsf")) %>%
@@ -1641,7 +1658,8 @@ flood_pop_area <- function(flood_type) {
 
 ### Fluvial
 ```{r}
-if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
+wsf_file <- str_subset(list.files("Stats", full.names = T), "WSF") 
+if (!file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
   fu <- gather_flood_data("fu")
   
   fu_plot <- fu %>%
@@ -1682,7 +1700,8 @@ print_text(flood_string("fu"))
 
 ### Pluvial
 ```{r}
-if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
+wsf_file <- str_subset(list.files("Stats", full.names = T), "WSF") 
+if (!file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
   pu <- gather_flood_data("pu")
   pu_plot <- pu %>%
     ggplot +
@@ -1725,7 +1744,8 @@ print_text(flood_string("pu"))
 
 ### Combined Fluvial & Pluvial
 ```{r}
-if (!file.exists("Stats/WSF.xlsx")) warning("No WSF.xlsx file.") else {
+wsf_file <- str_subset(list.files("Stats", full.names = T), "WSF") 
+if (!file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
   pufu <- gather_flood_data("comb")
   pufu <- bind_rows(
     fu %>% mutate(type = "River"),
@@ -2022,7 +2042,7 @@ cyclones <- read_sf(cyclone_archive_file) %>%
   st_transform("EPSG:4326")
 # plot(cyclones)
 
-cyclones_near_index <- st_is_within_distance(aoi, cyclones, as_units(500, "km"))
+cyclones_near_index <- st_is_within_distance(aoi, cyclones, as_units(250, "km"))
 cyclones_near <- cyclones[cyclones_near_index[[1]],]
 cyclones_near$distance_km <- drop_units(st_distance(st_centroid(aoi), cyclones_near)[1,])/1000
 cyclones_near <- cyclones_near %>% st_shift_longitude()
@@ -2110,7 +2130,8 @@ if (nrow(cyclones_near) > 0) {
   
   cyclones_text_select %>% print_paged_df()
   
-  cyclones_text %>% filter(min_distance <50) %>% count(USA_SSHS)  %>% print_paged_df()
+  cyclones_text %>% filter(min_distance <250) %>% count(USA_SSHS)  %>% print_paged_df()
+  cyclones_text %>% mutate(distance_bin = cut_width(min_distance, width = 50, boundary = 0)) %>% count(distance_bin)
 }
 ```
 
@@ -2159,10 +2180,7 @@ ggsave("plots/monthly-pv.png", device = "png",
 ## FWI
 ```{r}
 # Set parameters
-aoi <- vect("/Users/bennotkin/Downloads/AOI 5") %>% project("EPSG:4326")
-fwi_directory <- "source-data.nosync/nasa-fwi/" # Include final forward slash
-dates <- as.Date("2016-01-01"):as.Date("2021-12-31") %>% as.Date() # We have data for 2016-01-01 through 2022-09-04
-city <- "Bor"
+dates <- as.Date(as.Date("2016-01-01"):as.Date("2021-12-31")) # We have data for 2016-01-01 through 2022-09-04
 
 # Extract AOI-specific data
 extract_aoi <- function(aoi, dates) {
