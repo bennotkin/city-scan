@@ -397,7 +397,7 @@ pop_growth <- pop_longitude %>% filter(Group == city) %>% select(-Area_km)
 # if (in_oxford) pop_growth <- bind_rows(pop_growth, get_de_pop_growth(city, country)) # Why did I want this? Was it supposed to be !in_oxford?
 pop_growth <- arrange(pop_growth, Year) # %>%
   # For when we want to plot multiple components to the city population
-  mutate(Group = case_when(Location == "Sarbagita" ~ "Combined", T ~ "Other"))
+  # mutate(Group = case_when(Location == "Sarbagita" ~ "Combined", T ~ "Other"))
 
 # Write pop_growth to data-sharing
 write_csv(pop_growth, "data-sharing/04-tabular-data/population-growth.csv")
@@ -450,7 +450,7 @@ print_paged_df(pop_growth_summary)
 pmap(pop_growth_summary, \(...) {
   row <- tibble(...)
   glue("{row$Location}'s population grew by {row$change_pct} from {scales::comma(row$pop_1)} in {row$year_1} to {scales::comma(row$pop_last)} in {row$year_last}")
-}) %>% cat(sep = "\n") %>% print_text()
+}) %>% unlist() %>% cat(sep = "\n") %>% print_text()
 
 # Print pop growth tables (OUTPUT)
 print_text("Yearly population, sorted by absolute growth")
@@ -784,7 +784,7 @@ if (in_oxford) {
   national_shares_long <- national_shares %>%
     pivot_longer(cols = contains("Share"), names_to = "Indicator", values_to = "Percentage") %>%
     mutate(Indicator = factor(Indicator, levels = c("GDP Share", "Employment Share", "Population Share")))
-  national_shares_plot <-  national_shares_long %>%
+  national_shares_plot <- national_shares_long %>%
     ggplot(aes(x = Percentage, y = Location, fill = Indicator)) +
     geom_col(position = "dodge") +
     # geom_text(aes(label = round(100*Percentage)), position = position_dodge(width = 1))
@@ -803,9 +803,11 @@ if (in_oxford) {
     labs(title = "Cities' shares of national population, employment & GDP",
          y = "City",
          fill = "") + 
-    scale_x_continuous(breaks = seq(0, ceiling(max(national_shares$`Population Share`, national_shares$`Employment Share`, national_shares$`GDP Share`) * 10) /10, .05),
+    scale_x_continuous(breaks = seq(0, 1, .05),
                        labels = scales::percent_format(accuracy = 1),
-                       expand = expansion(c(0, NA)))
+                       expand = expansion(c(0, NA))) +
+    # Keeps text on plot when city's share is one of largest
+    expand_limits(x = 1.2 * max(filter(national_shares_long, Group == city)$Percentage))
   # scale_fill_manual(values = c("GDP Share" = "dark grey", "Employment Share" = "light grey", "Population Share" = "black")) +
   # scale_color_manual(values = c("GDP Share" = "dark grey", "Employment Share" = "black", "Population Share" = "black"))
   ggsave("plots/oxford-national-shares.png", plot = national_shares_plot, device = "png",
@@ -1307,7 +1309,7 @@ if (in_oxford) {
 ## WSF
 ### Urban built-up area
 ```{r}
-wsf_file <- str_subset(list.files("Stats", full.names = T), "WSF") 
+wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*xlsx") 
 if (!file.exists(wsf_file)) {
   warning("No WSF.xlsx file. Should there be? Check for different file name.")
 } else {
@@ -1496,11 +1498,11 @@ print_text(paste0("The next largest land classes are ", lc2, " (", lc2_pct, "%) 
 
 ### Elevation
 ```{r}
-elevation <- read_csv(str_subset(list.files("Stats", full = T), "elevation"), col_types = "cd")
-
-elevation2 <- elevation %>% subset(!is.na(Bin)) %>%
+elevation <- read_csv(str_subset(list.files("Stats", full = T), "elevation"), col_types = "cd") %>%
+  subset(!is.na(Bin)) %>%
   mutate(Elevation = as.numeric(str_replace(Bin, "-.*", "")),
-         legend = factor(Bin, levels = Bin))
+         Bin = factor(Bin, levels = Bin),
+         percent = Count/sum(Count))
 
 # elevation2 %>%
 #   ggplot() +
@@ -1518,7 +1520,7 @@ elevation2 <- elevation %>% subset(!is.na(Bin)) %>%
 #        y = "Percent of Urban Area",
 #        x = "Elevation (m)")
 
-elevation_names <- elevation2$legend
+elevation_names <- elevation$Bin
 elevation_colors <- c(
   "#f5c4c0",
   "#f19bb4",
@@ -1570,21 +1572,20 @@ elevation_colors <- c(
 # ggsave("plots/oxford-elevation-stepplot.png", device = "png",
 #        width = 8, height = 8, units = "in", dpi = "print")
 
-ggdonut(elevation2, "legend", "percent", colors = elevation_colors, title = "Elevation")
+ggdonut(elevation, "Bin", "percent", colors = elevation_colors, title = "Elevation")
 ggsave("plots/wsf-elevation-pieplot.png", device = "png",
        width = 8, height = 5, units = "in", dpi = "print")
 ```
 
 ### Slope
 ```{r}
-slope <- read_csv(str_subset(list.files("Stats", full = T), "slope"), col_types = "cdd") %>%
-  rename(legend = Bin)
+slope <- read_csv(str_subset(list.files("Stats", full = T), "slope"), col_types = "cd") %>%
+  subset(!is.na(Bin)) %>%
+  mutate(Slope = as.numeric(str_replace(Bin, "[-+].*", "")),
+         Bin = factor(Bin, levels = Bin),
+         percent = Count/sum(Count))
 
-slope2 <- slope %>% subset(!is.na(legend)) %>%
-  mutate(Slope = as.numeric(str_replace(legend, "[-+].*", "")),
-         legend = factor(legend, levels = legend))
-
-slope_names <- slope2 %>% arrange(Slope) %>% .$legend
+slope_names <- arrange(slope, Slope)$Bin
 slope_colors <- c(
   "#ffffd4",
   "#fed98e",
@@ -1593,7 +1594,7 @@ slope_colors <- c(
   "#993404") %>%
   setNames(slope_names)
 
-ggdonut(slope2, "legend", "percent", colors = slope_colors, title = "Slope")
+ggdonut(slope, "Bin", "percent", colors = slope_colors, title = "Slope")
 ggsave("plots/wsf-slope-pieplot.png", device = "png",
        width = 8, height = 5, units = "in", dpi = "print")
 ```
@@ -1634,7 +1635,7 @@ flood_string <- function(flood_type) {
 }
 
 gather_flood_data <- function(flood_type) {
-  wsf_file <- str_subset(list.files("Stats", full.names = T), "WSF") 
+  wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*xlsx") 
   df <- read_xlsx(wsf_file, sheet = toupper(flood_type)) %>%
     select(Year = Value, uba_km2 = AREA_sq_km) %>%
     mutate(growth = (uba_km2 / lag(uba_km2) - 1))
@@ -1658,7 +1659,7 @@ flood_pop_area <- function(flood_type) {
 
 ### Fluvial
 ```{r}
-wsf_file <- str_subset(list.files("Stats", full.names = T), "WSF") 
+wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*xlsx")
 if (!file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
   fu <- gather_flood_data("fu")
   
@@ -1700,7 +1701,7 @@ print_text(flood_string("fu"))
 
 ### Pluvial
 ```{r}
-wsf_file <- str_subset(list.files("Stats", full.names = T), "WSF") 
+wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*xlsx") 
 if (!file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
   pu <- gather_flood_data("pu")
   pu_plot <- pu %>%
@@ -1744,7 +1745,7 @@ print_text(flood_string("pu"))
 
 ### Combined Fluvial & Pluvial
 ```{r}
-wsf_file <- str_subset(list.files("Stats", full.names = T), "WSF") 
+wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*xlsx")
 if (!file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
   pufu <- gather_flood_data("comb")
   pufu <- bind_rows(
@@ -1832,7 +1833,7 @@ print_text("Causes of flood events")
 count(floods, MAINCAUSE)
 
 flood_text_all <- floods %>% mutate(
-  severity = case_when(SEVERITY == 1 ~ "Large event", SEVERITY == 1.5 ~ "Very large event", SEVERITY == 2 ~ "Extreme event"),
+  severity = ordered(SEVERITY, labels = c("Large event", "Very large event", "Extreme event")),
   duration = paste(ENDED - BEGAN, "days"),
   fatalities = paste(scales::label_comma()(DEAD), "fatalities"),
   displaced = paste(scales::label_comma()(DISPLACED), "displaced"),
@@ -1894,19 +1895,15 @@ st_write(flood_archive, "data-sharing/03-analysis-inputs/flood-events/flood-even
 ## Earthquakes
 ```{r}
 get_earthquake_data <- function() {
-  library(httr)
-  url <- "http://www.ngdc.noaa.gov/hazel/hazard-service/api/v1/earthquakes"
-  payload <- ""
-  encode <- "raw"
-  response <- VERB("GET", url, body = payload,
-                   content_type("application/octet-stream"),
-                   set_cookies(`csrftoken` = "CJOWAoXjdFb7fL1Xf3asS9mj6GVJmbvvIKj365nRxupF27lO5UfkZECjtZoHLuuD"),
-                   encode = encode,
-                   query = list(minYear = 1900),
-                   maxYear = lubridate::year(Sys.Date()))
-  eq_json <- content(response, "text")
-  eq <- jsonlite::fromJSON(eq_json) %>% .[[1]] %>%
-    as_tibble()
+library(httr2)
+# Previously, in httr, used set_cookies(`csrftoken` = "CJOWAoXjdFb7fL1Xf3asS9mj6GVJmbvvIKj365nRxupF27lO5UfkZECjtZoHLuuD")
+resps <- request("http://www.ngdc.noaa.gov/hazel/hazard-service/api/v1/earthquakes") %>%
+  req_url_query(minYear = 1900, maxYear = lubridate::year(Sys.Date())) %>%
+  req_perform_iterative(iterate_with_offset("page"))
+eq <- resps %>%
+  resps_successes() %>%
+  resps_data(\(resp) bind_rows(resp_body_json(resp)$items)) %>%
+  bind_rows()
   return(eq)
 }
 
@@ -2179,77 +2176,20 @@ ggsave("plots/monthly-pv.png", device = "png",
 
 ## FWI
 ```{r}
-# Set parameters
-dates <- as.Date(as.Date("2016-01-01"):as.Date("2021-12-31")) # We have data for 2016-01-01 through 2022-09-04
-
-# Extract AOI-specific data
-extract_aoi <- function(aoi, dates) {
-  extent <- ext(aoi) %>% extend(2)
-  cord <- dates %>% # cord is a bad fire pun
-    lapply(function(date) {
-      file_name <- file.path(fwi_directory, paste0("FWI.GEOS-5.Daily.Default.", date %>% stringr::str_replace_all("-", ""), ".tif"))
-      # path <- paste0(fwi_directory, file_name)
-      if (file.exists(file_name)) {
-        # Read file
-        fwi <- terra::rast(file_name)
-        crs(fwi) <- "epsg:4326"
-        names(fwi) <- stringr::str_replace(names(fwi), ".*_", "")
-        fwi_crop <- terra::crop(fwi, extent, extend = T)
-        output <- list(date = date, fwi_raster = fwi_crop)      
-        return(output)
-      } else {
-        warning(paste("No file exists for", date)) 
-        return(NA)
-      }
-    })
-  cord <- subset(cord, !is.na(cord))
-  return(cord)
-}
-
-cord_to_df <- function(cord) {
-  df <- lapply(cord, function(item) {
-    fwi_crop_df <- values(item$fwi_raster$FWI) %>% as_tibble()
-    fwi_crop_df$date <- item$date
-    return(fwi_crop_df)
-  }) %>% bind_rows()
-  return(df)
-}
-
-cord <- extract_aoi(aoi, dates)
-cord_df <- cord_to_df(cord)
-
-# TIFF of 5th hottest day
-cord_raster <- lapply(cord, \(i) i$fwi_raster$FWI)
-q99_raster <- do.call(c, cord_raster) %>% quantile(.986, na.rm = T)
-writeRaster(q99_raster, paste0(city, "-fwi-98th.tif"))
-
-# Plot FWI over year (line chart)
-week_95th <- cord_df %>%
-  filter(!is.na(FWI)) %>%
-  mutate(
-    year = ordered(lubridate::year(date)),
-    month = lubridate::month(date),
-    week = lubridate::week(date),
-    yday = lubridate::yday(date),
-    ) %>%
-{  bind_rows(
-    summarize(., .by = c(week, year), q90 = quantile(FWI, .95)),
-    summarize(., .by = c(week), q90 = quantile(FWI, .95), year = "All")
-  ) } %>%
-  mutate(year = ordered(year, levels = c(2016:2023, "All")))
-
 month_labels <- cumsum(c("Jan" = 31, "Feb" = 28, "Mar"= 31, "Apr" = 30, "May" = 31, "Jun" = 30,
   "Jul" = 31, "Aug" = 31, "Sep"= 30, "Oct" = 31, "Nov" = 30, "Dec" = 31)/7) - 31/7
 
-ggplot(week_95th, aes(x = week, y = q90, color = year)) +
-  # geom_line(data = week_95th %>% filter(year != "All"), alpha = 0.5) +
-  geom_line(data = week_95th %>% filter(year == "All"), color = "black") +
+fwi_file <- str_subset(list.files("Stats", full = T), "fwi")
+fwi <- read_csv(fwi_file, col_types = "dd")
+
+ggplot(fwi, aes(x = week, y = pctile_95)) +
+  geom_line() +
   scale_x_continuous(breaks = month_labels, labels = names(month_labels), minor_breaks = NULL,
                      expand = c(0,0)) +
   scale_y_continuous(expand = expansion(c(0, .1))) +    
   #   scale_color_manual(values = hues) +
   theme_minimal() +
-  labs(title = paste("FWI in", city),
+  labs(title = paste("FWI in", city, "2016-2021"),
        y = "95th percentile FWI") +
   theme(axis.line = element_line(linewidth = .5, color = "black"),
         panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
@@ -2273,8 +2213,7 @@ plots <- list.files("plots")
 # }
 
 missing_plots <- filter(slide_list, filename %ni% plots & type == "plot") %>%
-  filter(conditions != "none") %>%
-  filter(!in_oxford & conditions != "oxford")
+  filter(conditions != "none")
 # Use the following to make a warning instead of printing a table
 # mutate(
 #   slide_number = paste(section, section_order, sep = "."),
