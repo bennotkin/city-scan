@@ -1309,12 +1309,14 @@ if (in_oxford) {
 ## WSF
 ### Urban built-up area
 ```{r}
-wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*xlsx") 
+wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*(csv|xlsx)") 
 if (!file.exists(wsf_file)) {
   warning("No WSF.xlsx file. Should there be? Check for different file name.")
 } else {
   # Urban built-up area ----
-  wsf <- read_xlsx(wsf_file, sheet = "WSF") %>%
+  wsf <- if (str_detect(wsf_file, "xlsx$")) read_xlsx(wsf_file, sheet = "WSF")
+  wsf <- if (str_detect(wsf_file, "csv$")) read_csv(wsf_file, col_types = "dd")
+  wsf <- wsf %>%
     rename(Year = 1) %>%
     select(Year, uba_km2 = any_of(c("AREA_sq_km", "cumulative sq km"))) %>%
     mutate(growth_pct = (uba_km2 / lag(uba_km2) - 1), growth_km2 = uba_km2 - lag(uba_km2))
@@ -1602,12 +1604,15 @@ ggsave("plots/wsf-slope-pieplot.png", device = "png",
 ## Urban Flooding
 ```{r}
 flood_string <- function(flood_type) {
-  osmpt <- read_xls(paste0("Stats/", flood_type, "_osmpt.xls"))[,1:4] %>% distinct() %>%
+  osmpt_file <- str_subset(list.files("Stats", full.names = T), paste0(flood_type, "_osmpt.xls")) 
+  osmpt <- read_excel(osmpt_file)[,1:4] %>% distinct() %>%
     tryCatch(error = function(e) {
       warning(paste0("File `Stats/", flood_type, "_osmpt.xls does not exist. Is it named differently?<br><br>"))
       return(NULL)
     })
-  major_roads <- read_xls(paste0("Stats/", flood_type, "_majorroad.xls")) %>% tryCatch(error = function(e) return(data.frame(OID = 0, gridcode = 0, LENGTH = 0, PERCENTAGE = 0)))
+  major_roads_file <- str_subset(list.files("Stats", full.names = T), paste0(flood_type, "_majorroad.xls")) 
+  major_roads <- read_excel(major_roads_file) %>%
+    tryCatch(error = function(e) return(data.frame(OID = 0, gridcode = 0, LENGTH = 0, PERCENTAGE = 0)))
   
   if (is.null(osmpt)) return("No OSMPT data.") else {
     roads_pct <- major_roads$PERCENTAGE[major_roads$gridcode == 1] %>% round(0)
@@ -1636,16 +1641,20 @@ flood_string <- function(flood_type) {
 
 gather_flood_data <- function(flood_type) {
   wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*xlsx") 
-  df <- read_xlsx(wsf_file, sheet = toupper(flood_type)) %>%
-    select(Year = Value, uba_km2 = AREA_sq_km) %>%
-    mutate(growth = (uba_km2 / lag(uba_km2) - 1))
-  df <- left_join(df, wsf, by = "Year", suffix = c("", "_wsf")) %>%
+  df <- read_excel(wsf_file, sheet = toupper(flood_type)) %>%
+    select(Year = Value, uba_km2 = AREA_sq_km)
+  df <- full_join(df, wsf, by = "Year", suffix = c("_exposed", "_wsf")) %>%
     select(-growth_pct, -growth_km2) %>%
-    mutate(percent_uba = uba_km2/uba_km2_wsf)
+    arrange(Year) %>%
+    fill(uba_km2_exposed) %>%
+    mutate(
+      growth_pct = scales::percent(uba_km2_exposed / lag(uba_km2_exposed) - 1, accuracy = 0.01),
+      percent_uba_exposed = scales::percent(uba_km2_exposed/uba_km2_wsf, accuracy = 0.01))
   return(df)
 }
 flood_pop_area <- function(flood_type) {
-  read_xls(paste0("Stats/", flood_type, "_pop_area.xls")) %>% 
+  pop_file <- str_subset(list.files("Stats", full.names = T), paste0(flood_type, "_pop_area.xls")) 
+  read_excel(pop_file) %>% 
     arrange(VALUE) %>% 
     rename(Area = VALUE_1) %>%
     # {.$Area[2] / .$Area[1]}
@@ -1660,16 +1669,16 @@ flood_pop_area <- function(flood_type) {
 ### Fluvial
 ```{r}
 wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*xlsx")
-if (!file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
+if (length(wsf_file) == 0 || !file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
   fu <- gather_flood_data("fu")
   
   fu_plot <- fu %>%
     ggplot +
-    geom_line(aes(x = Year, y = uba_km2)) +
+    geom_line(aes(x = Year, y = uba_km2_exposed)) +
     scale_x_continuous(
       breaks = seq(1985, 2020, 5),
       minor_breaks = seq(1985, 2021, 1)) + 
-    scale_y_continuous(labels = scales::comma, limits = c(0, max(fu$uba_km2)), expand = c(0, NA)) +
+    scale_y_continuous(labels = scales::comma, limits = c(0, NA), expand = expansion(c(0, 0.05))) +
     theme_minimal() +
     labs(title = "",#paste(city, "Built-Up Area Exposed to River Flooding Historical Growth, 1985-2015"),
          y = bquote('Exposed'~km^2)) +
@@ -1702,15 +1711,15 @@ print_text(flood_string("fu"))
 ### Pluvial
 ```{r}
 wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*xlsx") 
-if (!file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
+if (length(wsf_file) == 0 || !file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
   pu <- gather_flood_data("pu")
   pu_plot <- pu %>%
     ggplot +
-    geom_line(aes(x = Year, y = uba_km2)) +
+    geom_line(aes(x = Year, y = uba_km2_exposed)) +
     scale_x_continuous(
       breaks = seq(1985, 2020, 5),
       minor_breaks = seq(1985, 2021, 1)) + 
-    scale_y_continuous(labels = scales::comma, limits = c(0, max(pu$uba_km2)), expand = c(0, NA)) +
+    scale_y_continuous(labels = scales::comma, limits = c(0, NA), expand = expansion(c(0, 0.05))) +
     theme_minimal() +
     labs(title = "",#paste(city, "Built-Up Area Exposed to Rainwater Flooding Historical Growth, 1985-2015"),
          y = bquote('Exposed'~km^2)) +
@@ -1743,7 +1752,36 @@ if (!file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
 print_text(flood_string("pu"))
 ```
 
-### Combined Fluvial & Pluvial
+### Coastal
+```{r}
+wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*xlsx")
+if (!file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
+  cu <- gather_flood_data("cu")
+  cu_plot <- cu %>%
+    ggplot +
+    geom_line(aes(x = Year, y = uba_km2_exposed)) +
+    scale_x_continuous(
+      breaks = seq(1985, 2020, 5),
+      minor_breaks = seq(1985, 2021, 1)) + 
+    scale_y_continuous(labels = scales::comma, limits = c(0, NA), expand = expansion(c(0, 0.05))) +
+    theme_minimal() +
+    labs(title = "",#paste(city, "Built-Up Area Exposed to Coastal Flooding Historical Growth, 1985-2015"),
+         y = bquote('Exposed'~km^2)) +
+    theme(axis.line = element_line(linewidth = .5, color = "black"),
+          axis.title.x = element_blank())
+  ggplot2:::print.ggplot(cu_plot)
+  ggsave("plots/wsf-cu-plot.png", plot = cu_plot, device = "png",
+         width = 4, height = 3.5, units = "in", dpi = "print")
+  
+  print_paged_df(bind_rows(head(cu, 1), tail(cu, 1)))
+  print_text(paste0("In ", cu[1,1], ", ", round(cu[1,2], 2), " km^2 of the built-up area was exposed to coastal flooding at a minimum depth of 15 cm"))
+  print_text(paste("Percentage of highest populated area exposed to coastal flooding:", flood_pop_area("cu")$Percentage))
+
+}
+print_text(flood_string("cu"))
+```
+
+### Combined Fluvial, Pluvial & Coastal
 ```{r}
 wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*xlsx")
 if (!file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
@@ -1751,17 +1789,18 @@ if (!file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
   pufu <- bind_rows(
     fu %>% mutate(type = "River"),
     pu %>% mutate(type = "Rainwater"),
+    cu %>% mutate(type = "Coastal"),
     pufu %>% mutate(type = "Combined")
   )
   
   pufu_plot <- pufu %>%
     # subset(type == "Combined") %>%
-    ggplot(aes(x = Year, y = uba_km2, color = type)) +
+    ggplot(aes(x = Year, y = uba_km2_exposed, color = type)) +
     geom_line() +
     scale_x_continuous(
       breaks = seq(1985, 2020, 5),
       minor_breaks = seq(1985, 2021, 1)) + 
-    scale_y_continuous(labels = scales::comma, limits = c(0, max(pufu$uba_km2)), expand = c(0, NA)) +
+    scale_y_continuous(labels = scales::comma, limits = c(0, NA), expand = expansion(c(0, 0.05))) +
     theme_minimal() +
     theme(legend.position = "bottom") +
     labs(title = "",#paste(city, "Built-Up Area Exposed to River & Rainwater Flooding, 1985-2015"),
@@ -1771,21 +1810,6 @@ if (!file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
   ggplot2:::print.ggplot(pufu_plot)
   ggsave("plots/wsf-pufu-plot.png", plot = pufu_plot, device = "png",
          width = 4, height = 3.5, units = "in", dpi = "print")
-  
-  # pufu %>%
-  #   # subset(type == "Combined") %>%
-  #   ggplot(aes(x = Year, y = percent_uba, color = type)) +
-  #   geom_line() +
-  #   scale_x_continuous(
-  #     breaks = seq(1985, 2020, 5),
-  #     minor_breaks = seq(1985, 2021, 1)) + 
-  #   scale_y_continuous(labels = scales::percent, limits = c(0, max(pufu$percent_uba)), expand = c(0, NA)) +
-  #   theme_minimal() +
-  #   theme(legend.position = "bottom") +
-  #   labs(title = "",#paste(city, "Built-Up Area Exposed to River & Rainwater Flooding, 1985-2015"),
-  #        y = bquote('Exposed'~km^2), color = "") +
-  #   theme(axis.line = element_line(linewidth = .5, color = "black"),
-  #         axis.title.x = element_blank())
   
   comb <- subset(pufu, type == "Combined")
   # comb %>% mutate(diff = comb$uba_km2 - lag(comb$uba_km2)) %>% .$diff %>% mean(na.rm = T) 
@@ -1833,7 +1857,7 @@ print_text("Causes of flood events")
 count(floods, MAINCAUSE)
 
 flood_text_all <- floods %>% mutate(
-  severity = ordered(SEVERITY, labels = c("Large event", "Very large event", "Extreme event")),
+  severity = ordered(SEVERITY, levels = c(1, 1.5, 2), labels = c("Large event", "Very large event", "Extreme event")),
   duration = paste(ENDED - BEGAN, "days"),
   fatalities = paste(scales::label_comma()(DEAD), "fatalities"),
   displaced = paste(scales::label_comma()(DISPLACED), "displaced"),
@@ -1890,6 +1914,65 @@ ggsave("plots/darthmouth_flood_events.pdf", device = "pdf",
        width = 20, height = 5.833, units = "in", dpi = "print")
 
 st_write(flood_archive, "data-sharing/03-analysis-inputs/flood-events/flood-events.shp", append = F)
+
+# ggplot(flood_text_all) +
+#   # geom_linerange(aes(xmin = BEGAN, xmax = ENDED), y = 0) +
+#   geom_point(aes(x = BEGAN, y = 0, size = SEVERITY)) +
+#     scale_x_date(limits = c(as.Date("1984-01-01"),as.Date("2020-12-31")), expand = c(0,0)) +
+#     scale_y_continuous(limits = c(-1800, 1800), breaks = c(1825,3650)) +
+#     theme_minimal()
+#   theme(axis.text = element_blank(), axis.title = element_blank(), panel.grid = element_blank())
+
+flood_text_all2 <- flood_text_all %>%
+  mutate(
+    mag = normalize(DEAD) * normalize(DISPLACED) * SEVERITY,
+    begin_day = lubridate::yday(BEGAN),
+    end_day = lubridate::yday(ENDED),
+    begin_month = lubridate::month(BEGAN),
+    end_month = lubridate::month(ENDED),
+    begin_year = lubridate::year(BEGAN),
+    end_year = lubridate::year(ENDED))
+sort(flood_text_all2$mag, decreasing = T)[10]
+
+# flood_text
+# flood_text <- flood_text_all %>%
+#     mutate(mag = normalize(DEAD) * normalize(DISPLACED) * SEVERITY) %>%
+#     slice_max(mag, n = 10)
+
+# flood_text_all2[which(order(flood_text_all2$mag, decreasing = TRUE) > 10),"text"] <- NA
+flood_text_all2[which(rank(-flood_text_all2$mag) >= 10),"text"] <- NA
+# flood_text_all2[order(flood_text_all2$mag, decreasing = T)[1:10],"text"]
+
+month_labels <- cumsum(c("Jan" = 31, "Feb" = 28, "Mar"= 31, "Apr" = 30, "May" = 31, "Jun" = 30,
+  "Jul" = 31, "Aug" = 31, "Sep"= 30, "Oct" = 31, "Nov" = 30, "Dec" = 31))
+
+flood_text_all2 %>%
+  ggplot(aes(y = begin_year, x = begin_day)) +
+  geom_point(aes(size = DISPLACED, alpha = severity), color = "darkblue") +
+  # geom_label_repel(
+  #   aes(label = text),
+  #   size = 2, min.segment.length = 0, label.r = 0, alpha = 0.8, force_pull = .25, box.padding = .5) +
+  scale_x_continuous(
+    limits = c(0, 366), expand = c(0, 0),
+    breaks = month_labels - 15, minor_breaks = c(0, month_labels)) +
+  scale_y_reverse(
+    # expand = c(0,0),
+    breaks = seq(1985, 2020, by = 5), minor_breaks = 1985:2022 - 0.5) +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_line(linewidth = .5, color = "grey92"),
+    axis.title = element_blank(),
+    # legend.position = "bottom"
+    ) +
+  scale_alpha_discrete(range = c(0.3, 1)) +
+  scale_size_continuous(
+    range = c(3, 10),
+    breaks = range(flood_text_all2$DISPLACED),
+    labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
+  labs(alpha = "Severity", size = "Displaced")
+ggsave("plots/darthmouth_flood_events_alt.pdf", device = "pdf",
+       width = 20, height = 5.833, units = "in", dpi = "print")
 ```
 
 ## Earthquakes
@@ -1914,13 +1997,6 @@ damages <- c("0" = "None",
              "4" = "Extreme")
 
 eq <- get_earthquake_data()
-# eq <- read_csv("../turkiye-earthquakes.csv")
-
-# as.Date("2020-12-31") - as.Date("1984-01-01")
-# # 13514
-# 
-# as.Date("2025-12-31") - as.Date("1885-01-01")
-# # 51498
 
 y_ratio <- 51498 / 13514
 # 3.324 
@@ -2024,6 +2100,45 @@ st_write(eq_near, "data-sharing/03-analysis-inputs/earthquakes/earthquakes-500km
 #   geom_point() +
 #   theme(legend.position = "none") +
 #   geom_point(data = slice_max(eq_text, magXdist, n = 15), aes(x = distance, y = eqMagnitude), color = "gold")
+
+eq_text_select <- eq_text_select %>% mutate(text2 = glue("{line1}; {line2}; {line3}; {line4}"))
+eq_plot <- ggplot(mapping = aes(y = BEGAN, x = drop_units(distance))) +
+  geom_point(data = filter(eq_text, !is.na(eqMagnitude)), aes(size = eqMagnitude), shape = 1) +
+  # geom_text(data = filter(eq_text, !is.na(eqMagnitude)), aes(size = eqMagnitude, label = eqMagnitude)) +
+  geom_text_repel(data = eq_text_select, aes(label = text2), size = 3,
+                  direction = "y", hjust = 0, xlim = c(505, 1000),
+                  segment.linetype = "dotted") +
+  geom_point(data = filter(eq_text, is.na(eqMagnitude)), shape = 1, aes(color = " ")) +
+  scale_x_continuous(
+    limits = c(0, 500),
+    breaks = seq(0, 500, 100),
+    expand = expansion(c(0, 0))) +
+  scale_y_continuous(
+    # limits = c(NA, as.Date("1900-01-01")),
+    # expand = expansion(c(0, 0.05)),
+    breaks = seq.Date(as.Date("1900-01-01"), Sys.Date(), by = "20 years"),
+    minor_breaks = seq.Date(as.Date("1900-01-01"), as.Date("2030-01-01"), by = "5 years"),
+    labels = seq(1900, 2025, by = 20),
+    trans = c("date", "reverse")) +
+  labs(
+    x = "Distance from epicenter (km)",
+    y = "Year",
+    size = "Magnitude",
+    color = "Magnitude unavailable") +
+  scale_size(
+    # max_size = 7,
+    range = c(1, 6)
+    ) +
+  scale_color_manual(values = c(" " = "grey")) +
+  theme_minimal() +
+  coord_cartesian(clip = 'off') +
+  theme(axis.line = element_line(linewidth = .5, color = "black"),
+        axis.title.x = element_blank(),
+        legend.position = "bottom",
+        plot.margin = margin(5.5, 300, 5.5, 5.5, "pt"))
+  ggsave("plots/earthquake-scatter.png", plot = eq_plot, device = "png",
+         width = 9, height = 6.5, units = "in", dpi = "print")
+  ggplot2:::print.ggplot(eq_plot)
 ```
 
 ## Cyclones  
@@ -2180,24 +2295,25 @@ month_labels <- cumsum(c("Jan" = 31, "Feb" = 28, "Mar"= 31, "Apr" = 30, "May" = 
   "Jul" = 31, "Aug" = 31, "Sep"= 30, "Oct" = 31, "Nov" = 30, "Dec" = 31)/7) - 31/7
 
 fwi_file <- str_subset(list.files("Stats", full = T), "fwi")
-fwi <- read_csv(fwi_file, col_types = "dd")
+if (length(fwi_file) == 0) warning("No FWI file") else {
+  fwi <- read_csv(fwi_file, col_types = "dd")
 
-ggplot(fwi, aes(x = week, y = pctile_95)) +
-  geom_line() +
-  scale_x_continuous(breaks = month_labels, labels = names(month_labels), minor_breaks = NULL,
-                     expand = c(0,0)) +
-  scale_y_continuous(expand = expansion(c(0, .1))) +    
-  #   scale_color_manual(values = hues) +
-  theme_minimal() +
-  labs(title = paste("FWI in", city, "2016-2021"),
-       y = "95th percentile FWI") +
-  theme(axis.line = element_line(linewidth = .5, color = "black"),
-        panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
-        panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray"),
-        axis.title.x = element_blank())
-ggsave(file.path("plots/nasa-fwi.png"), device = "png",
-       width = 4, height = 3.5, units = "in", dpi = "print")
-
+  ggplot(fwi, aes(x = week, y = pctile_95)) +
+    geom_line() +
+    scale_x_continuous(breaks = month_labels, labels = names(month_labels), minor_breaks = NULL,
+                      expand = c(0,0)) +
+    scale_y_continuous(expand = expansion(c(0, .1))) +    
+    #   scale_color_manual(values = hues) +
+    theme_minimal() +
+    labs(title = paste("FWI in", city, "2016-2021"),
+        y = "95th percentile FWI") +
+    theme(axis.line = element_line(linewidth = .5, color = "black"),
+          panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
+          panel.grid.minor = element_line(linewidth = .125, linetype = 2, color = "dark gray"),
+          axis.title.x = element_blank())
+  ggsave(file.path("plots/nasa-fwi.png"), device = "png",
+        width = 4, height = 3.5, units = "in", dpi = "print")
+}
 ```
 
 ## Plots Check
