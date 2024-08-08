@@ -23,7 +23,7 @@ nearby_countries_string <- "cambodia|vietnam|thailand|myanmar|burma|malays|brune
 # Download files from https://globalsolaratlas.info/download/
 # Download the *_GISdata_LTAy_YearlyMonthlyTotals_GlobalSolarAtlas-v2_AAIGRID/ version
 # The GEOTIFF format also works, but is typically much larger
-pv_path <- "../../03-multi-scan-materials/Vietnam_GISdata_LTAy_YearlyMonthlyTotals_GlobalSolarAtlas-v2_GEOTIFF/monthly/"
+pv_path <- "../../03-multi-scan-materials/World_PVOUT_GISdata_LTAm_AvgDailyTotals_GlobalSolarAtlas-v2_AAIGRID.nosync/"
 
 # Oxford Economics (internal)
 oxford_file <- "../../03-multi-scan-materials/Oxford Global Cities Data.csv"
