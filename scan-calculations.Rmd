@@ -1798,7 +1798,7 @@ flood_text_all <- floods %>% mutate(
   line1 = toupper(paste(lubridate::month(BEGAN, label = T, abbr = F), lubridate::year(BEGAN))),
   line2 = paste(severity, (MAINCAUSE), sep = ", "),
   line3 = paste(as.character(duration), fatalities, displaced, sep = ", "),
-  text = paste(line1, line2, line3, sep = "\n"),
+  text = paste0(line1, ": ", line2, "\n", line3),
     mag = normalize(DEAD) * normalize(DISPLACED) * SEVERITY,
     begin_day = lubridate::yday(BEGAN),
     end_day = lubridate::yday(ENDED),
@@ -1818,9 +1818,9 @@ flood_text_all %>%
   ggplot(aes(y = begin_year, x = begin_day)) +
   geom_text_repel(
     aes(label = text),
-    hjust = 0, size = 2,
+    hjust = 0, size = 4, lineheight = 0.9,
     min.segment.length = 0, force_pull = .25, box.padding = .5,
-    xlim = c(365, 700), direction = "y",
+    xlim = c(370, 700), direction = "y",
     segment.color = "grey46", segment.size = .25,
     segment.curvature = 1e-20, segment.square = T) +
   geom_point(aes(size = DISPLACED, alpha = severity), color = "darkblue") +
@@ -1835,10 +1835,11 @@ flood_text_all %>%
   theme(
     panel.grid.major = element_blank(),
     panel.grid.minor = element_line(linewidth = .5, color = "grey92"),
+    axis.text = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
     axis.title.x = element_blank(),
     legend.position = "bottom",
-    plot.margin = margin(5.5, 150, 5.5, 5.5, "pt")
-    ) +
+    plot.margin = margin(5.5, 250, 5.5, 5.5, "pt")) +
   scale_alpha_discrete(range = c(0.3, 1)) +
   scale_size_continuous(
     range = c(3, 10),
@@ -1918,17 +1919,17 @@ eq_plot <-
   ggplot(eq_text, aes(y = BEGAN, x = drop_units(distance))) +
   # geom_text(data = filter(eq_text, !is.na(eqMagnitude)), aes(size = eqMagnitude, label = eqMagnitude)) +
   geom_text_repel(
-    data = \(x) slice_max(x, magXdist, n = 10), aes(label = text2), size = 4,
-                  direction = "y", hjust = 0, xlim = c(505, 1000),
-    # segment.linetype = "dotted",
+    data = \(x) slice_max(x, magXdist, n = 10), aes(label = text2),
+    size = 4, hjust = 0, direction = "y",
+    xlim = c(515, 1000),
     segment.color = "grey46", segment.size = .25,
-    segment.curvature = 1e-20, segment.square = T
-    ) +
+    segment.curvature = 1e-20, segment.square = T) +
   geom_point(data = \(x) slice_max(x, magXdist, n = 10), aes(size = eqMagnitude, color = "grey46")) +
   geom_point(data = \(x) filter(x, !is.na(eqMagnitude)), aes(size = eqMagnitude), shape = 1) +
   geom_point(data = \(x) filter(x, is.na(eqMagnitude)), shape = 1, aes(color = "grey92")) +
   scale_x_continuous(
     limits = c(0, 500),
+    labels = \(x) paste(x, "km"),
     breaks = seq(0, 500, 100),
     expand = expansion(c(0, 0))) +
   scale_y_continuous(
@@ -1939,21 +1940,24 @@ eq_plot <-
     labels = seq(1900, 2025, by = 20),
     trans = c("date", "reverse")) +
   labs(
-    x = glue("Distance from {city} (km)"),
+    x = paste("Distance from", city),
     y = "Year",
     size = "Magnitude",
     color = "Magnitude unavailable") +
-  scale_size(
-    # max_size = 7,
-    range = c(1, 6)
-    ) +
+  scale_size(range = c(1, 6)) + # max_size = 7,
   scale_color_manual(values = c(" " = "grey")) +
   theme_minimal() +
   coord_cartesian(clip = 'off') +
-  theme(axis.line = element_line(linewidth = .5, color = "black"),
-        legend.position = "bottom",
-        plot.margin = margin(5.5, 450, 5.5, 5.5, "pt"),
-        plot.background = element_rect(fill = "white"))
+  theme(
+    axis.line = element_line(linewidth = .5, color = "black"),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 12),
+    legend.position = "right",
+    legend.justification.right = "bottom",
+    legend.direction = "horizontal",
+    legend.box.margin = margin(0, 0, -37, 15),
+    plot.margin = margin(5.5, 300, 5.5, 5.5, "pt"),
+    plot.background = element_rect(fill = "white", color = NULL))
   ggsave("plots/earthquake-scatter.png", plot = eq_plot, device = "png",
          width = 20, height = 5.833, units = "in", dpi = "print")
   ggplot2:::print.ggplot(eq_plot)
