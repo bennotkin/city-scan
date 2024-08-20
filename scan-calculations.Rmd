@@ -1139,7 +1139,7 @@ if (in_oxford) {
     scale_y_continuous(
       breaks = seq(0, 1, .05), minor_breaks = seq(0, 1, .01),
       limits = ylims_shares, expand = c(0,0),
-                       labels = scales::percent_format(accuracy = 1)) +
+      labels = scales::percent_format(accuracy = 1)) +
     scale_fill_manual(values = hues) +
     theme_minimal() +
     theme(axis.line = element_line(linewidth = .5, color = "black"),
@@ -1261,7 +1261,7 @@ if (in_oxford) {
     geom_text_repel(
       data = \(x) subset(x, Year == 2021),
       aes(label = Band, x = 2021, y = (pct_sum - Percent/2), color = forcats::fct_rev(Band)), 
-                    hjust = 0, size = 3, xlim = c(2021.25, 2030), box.padding = 0.02) +
+      hjust = 0, size = 3, xlim = c(2021.25, 2030), box.padding = 0.02) +
     scale_y_continuous(labels = scales::label_percent(),
                        expand = expansion(mult = c(0,0))) + 
     scale_x_continuous(minor_breaks = 2002:2030, limits = c(min(incomes_city2$Year), max(incomes_city2$Year) + 3),
@@ -1596,14 +1596,14 @@ gather_flood_data <- function(flood_type) {
 flood_pop_area <- function(flood_type) {
   pop_file <- str_subset(list.files("Stats", full.names = T), paste0(flood_type, "_pop_area.xls")) 
   tryCatch(
-  read_excel(pop_file) %>% 
-    arrange(VALUE) %>% 
-    rename(Area = VALUE_1) %>%
-    # {.$Area[2] / .$Area[1]}
-    mutate(Total_Pop_Area = max(Area),
-           Percentage = Area/Total_Pop_Area,
-           Percentage = scales::percent(Percentage, accuracy = 0.01)) %>%
-    filter(VALUE == 1) %>%
+    read_excel(pop_file) %>% 
+      arrange(VALUE) %>% 
+      rename(Area = VALUE_1) %>%
+      # {.$Area[2] / .$Area[1]}
+      mutate(Total_Pop_Area = max(Area),
+             Percentage = Area/Total_Pop_Area,
+             Percentage = scales::percent(Percentage, accuracy = 0.01)) %>%
+      filter(VALUE == 1) %>%
       rename(Flood_Pop_Area = Area),
       error = \(e) {
         warning(glue('Error on flood_pop_area("{flood_type}"): {e}'))
@@ -1798,14 +1798,14 @@ flood_text_all <- floods %>% mutate(
   line1 = toupper(paste(lubridate::month(BEGAN, label = T, abbr = F), lubridate::year(BEGAN))),
   line2 = paste(severity, (MAINCAUSE), sep = ", "),
   line3 = paste(as.character(duration), fatalities, displaced, sep = ", "),
-  text = paste(line1, line2, line3, sep = "\n"),
-    mag = normalize(DEAD) * normalize(DISPLACED) * SEVERITY,
-    begin_day = lubridate::yday(BEGAN),
-    end_day = lubridate::yday(ENDED),
-    begin_month = lubridate::month(BEGAN),
-    end_month = lubridate::month(ENDED),
+  text = paste0(line1, ": ", line2, "\n", line3),
+  mag = normalize(DEAD) * normalize(DISPLACED) * SEVERITY,
+  begin_day = lubridate::yday(BEGAN),
+  end_day = lubridate::yday(ENDED),
+  begin_month = lubridate::month(BEGAN),
+  end_month = lubridate::month(ENDED),
   begin_year = lubridate::year(BEGAN) + begin_day/1000, # The /1000 helps keep labels in proper vertical order
-    end_year = lubridate::year(ENDED))
+  end_year = lubridate::year(ENDED))
 
 # flood_text_all2[which(order(flood_text_all2$mag, decreasing = TRUE) > 10),"text"] <- NA
 flood_text_all[which(rank(-flood_text_all$mag) > 10),"text"] <- NA
@@ -1818,9 +1818,9 @@ flood_text_all %>%
   ggplot(aes(y = begin_year, x = begin_day)) +
   geom_text_repel(
     aes(label = text),
-    hjust = 0, size = 2,
+    hjust = 0, size = 4, lineheight = 0.9,
     min.segment.length = 0, force_pull = .25, box.padding = .5,
-    xlim = c(365, 700), direction = "y",
+    xlim = c(370, 700), direction = "y",
     segment.color = "grey46", segment.size = .25,
     segment.curvature = 1e-20, segment.square = T) +
   geom_point(aes(size = DISPLACED, alpha = severity), color = "darkblue") +
@@ -1835,10 +1835,11 @@ flood_text_all %>%
   theme(
     panel.grid.major = element_blank(),
     panel.grid.minor = element_line(linewidth = .5, color = "grey92"),
+    axis.text = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
     axis.title.x = element_blank(),
     legend.position = "bottom",
-    plot.margin = margin(5.5, 150, 5.5, 5.5, "pt")
-    ) +
+    plot.margin = margin(5.5, 250, 5.5, 5.5, "pt")) +
   scale_alpha_discrete(range = c(0.3, 1)) +
   scale_size_continuous(
     range = c(3, 10),
@@ -1846,7 +1847,7 @@ flood_text_all %>%
     labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
   labs(y = "Year", alpha = "Severity", size = "Displaced")
 ggsave("plots/darthmouth_flood_events_alt.pdf", device = "pdf",
-       width = 20, height = 5.833, units = "in", dpi = "print")
+  width = 20, height = 5.833, units = "in", dpi = "print")
 ```
 
 ## Earthquakes
@@ -1918,17 +1919,17 @@ eq_plot <-
   ggplot(eq_text, aes(y = BEGAN, x = drop_units(distance))) +
   # geom_text(data = filter(eq_text, !is.na(eqMagnitude)), aes(size = eqMagnitude, label = eqMagnitude)) +
   geom_text_repel(
-    data = \(x) slice_max(x, magXdist, n = 10), aes(label = text2), size = 4,
-                  direction = "y", hjust = 0, xlim = c(505, 1000),
-    # segment.linetype = "dotted",
+    data = \(x) slice_max(x, magXdist, n = 10), aes(label = text2),
+    size = 4, hjust = 0, direction = "y",
+    xlim = c(515, 1000),
     segment.color = "grey46", segment.size = .25,
-    segment.curvature = 1e-20, segment.square = T
-    ) +
+    segment.curvature = 1e-20, segment.square = T) +
   geom_point(data = \(x) slice_max(x, magXdist, n = 10), aes(size = eqMagnitude, color = "grey46")) +
   geom_point(data = \(x) filter(x, !is.na(eqMagnitude)), aes(size = eqMagnitude), shape = 1) +
   geom_point(data = \(x) filter(x, is.na(eqMagnitude)), shape = 1, aes(color = "grey92")) +
   scale_x_continuous(
     limits = c(0, 500),
+    labels = \(x) paste(x, "km"),
     breaks = seq(0, 500, 100),
     expand = expansion(c(0, 0))) +
   scale_y_continuous(
@@ -1939,21 +1940,24 @@ eq_plot <-
     labels = seq(1900, 2025, by = 20),
     trans = c("date", "reverse")) +
   labs(
-    x = glue("Distance from {city} (km)"),
+    x = paste("Distance from", city),
     y = "Year",
     size = "Magnitude",
     color = "Magnitude unavailable") +
-  scale_size(
-    # max_size = 7,
-    range = c(1, 6)
-    ) +
+  scale_size(range = c(1, 6)) + # max_size = 7,
   scale_color_manual(values = c(" " = "grey")) +
   theme_minimal() +
   coord_cartesian(clip = 'off') +
-  theme(axis.line = element_line(linewidth = .5, color = "black"),
-        legend.position = "bottom",
-        plot.margin = margin(5.5, 450, 5.5, 5.5, "pt"),
-        plot.background = element_rect(fill = "white"))
+  theme(
+    axis.line = element_line(linewidth = .5, color = "black"),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 12),
+    legend.position = "right",
+    legend.justification.right = "bottom",
+    legend.direction = "horizontal",
+    legend.box.margin = margin(0, 0, -37, 15),
+    plot.margin = margin(5.5, 300, 5.5, 5.5, "pt"),
+    plot.background = element_rect(fill = "white", color = NULL))
   ggsave("plots/earthquake-scatter.png", plot = eq_plot, device = "png",
          width = 20, height = 5.833, units = "in", dpi = "print")
   ggplot2:::print.ggplot(eq_plot)
