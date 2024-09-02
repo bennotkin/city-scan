@@ -8,7 +8,6 @@ plot,oxford-pop-distro.png,Population Distribution by Age,3,2,oxford,May come fr
 plot,world-pop-age-sex.png,Population Distribution by Age & Sex,3,3,all,
 map,map_POP.png,Population Density,3,4,all,
 map,map_rwi.png,Relative Wealth Index,3,6,all,
-map,map_SD.png,Difficulty of Social Distancing,3,7,Africa only,Only provided for cities in Africa
 plot,oxford-national-shares.png,"Cities' Shares of National Population, Employment & GDP",4,1,oxford,
 plot,oxford-emp_line.png,"City Growth in GDP, Employment and Population",4,2,oxford,Check if city is in Oxford Economics dataset
 plot,oxford-gdp_line.png,"City Growth in GDP, Employment and Population",4,2,oxford,Check if city is in Oxford Economics dataset
@@ -33,7 +32,6 @@ plot,monthly-pv.png,Solar Photovoltaic Power Potential,6,1,all,
 map,map_air_fixedlabel.png,Air Quality,6,2,all,
 map,map_summer.png,Summer Surface Temperature,6,3,all,
 map,map_winter.png,Winter Surface Temperature,6,4,occasional,Winter surface temperature is rarely included
-map,map_green.png,Green Spaces,6,5,all,
 map,map_NDVI.png,Green Spaces,6,5,all,
 map,map_deforest.png,Forest & Deforestation,6,6,all,
 plot,darthmouth_flood_events.pdf,Significant Flood Events,7,1,all,
@@ -55,7 +53,7 @@ plot,wsf-elevation-pieplot.png,Elevation,7,13,,
 map,map_slope.png,Slope,7,14,all,
 plot,wsf-slope-pieplot.png,Slope,7,14,all,
 map,map_LS.png,Landslide Susceptibility,7,15,all,
-plot,ngdc-earthquake-events.pdf,Earthquake Events,7,16,,
+plot,ngdc-earthquake-scatter.pdf,Earthquake Events,7,16,,
 map,map_seismic_hazard.png,Seismic Hazard & Risk,7,18,all,Take as a screen shot; file never exists.
 map,map_seismic_risk.png,Seismic Hazard & Risk,7,18,all,Take as a screen shot; file never exists.
 map,map_criticality.png,Road Network Criticality,7,19,all,

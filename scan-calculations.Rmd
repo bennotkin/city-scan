@@ -181,11 +181,12 @@ get_un_pop_growth <- function(city, country = country) {
 
 get_de_pop_growth <- function(city, country = country) {
   # citypopulation.de
+  if (tolower(tolatin(country)) == "sao tome and principe") country <- "saotome"
   url <- paste0("https://www.citypopulation.de/en/", str_replace_all(tolower(country), " ", ""), "/cities/")
   table_ids = c("citysection", "largecities", "adminareas")
   for (id in table_ids) {
     de <- read_html(url) %>%
-    html_node("section#citysection") %>%
+      html_node("section#citysection") %>%
       html_node("table") %>%
       html_table()
       if (any(str_detect(tolatin(de$Name), tolatin(city)))) break
@@ -228,9 +229,10 @@ Benchmark cities are selected as cities that are in neighboring countries and ha
 # Read Data ----
 if (!exists("oxford_full")) oxford_full <-
   read_csv(oxford_file,
-           col_types = "cccccccccdddddddddddddddddddddddddddddddddddddddddcllldlcclcc") # %>%
+           col_types = "cccccccccdddddddddddddddddddddddddddddddddddddddddcllldlcclcc") %>%
   # To rename a city (e.g., we did a scan for "Sarbagita" which is "Denpasar" in Oxford)
-  # mutate(Location = case_when(Location == "Denpasar" ~ "Sarbagita", T ~ Location))
+  # or to replace missing characters (e.g. "Lom�" ~ "Lomé")
+  mutate(Location = case_when(Location == "Lom�" ~ "Lomé", Location == "Yaound�" ~ "Yaoundé", T ~ Location))
 
 pop <- oxford_full %>%
   subset(Location == city & Indicator == "Total population", select = `2021`) %>%
@@ -287,9 +289,6 @@ oxford <- subset(oxford_full, Location %in% c(city, bm_cities)) %>%
   mutate(Group = case_when(Location == city ~ Location, T ~ "Benchmark") %>%
            factor(levels = c(city, "Benchmark")))
 
-# # Replace missing characters
-# oxford <- oxford %>% mutate(Location = str_replace(Location, "Lom�", "Lomé"))
-# bm_cities <- bm_cities %>% str_replace("Lom�", "Lomé")
 
 # Generate benchmark city text (OUTPUT)
 print_text("Benchmark footnote text:")
@@ -318,7 +317,7 @@ extra_inds <- c("Total population", "Employment - Total", "GDP, real, US$ - Tota
 ### Population Growth
 ```{r}
 if (nrow(oxford) > 0) {
-pop_longitude <- subset(oxford, Indicator == "Total population") %>%
+  pop_longitude <- subset(oxford, Indicator == "Total population") %>%
    select(Group, Location, Country, Indicator, matches('\\d')) %>%
     pivot_longer(cols = matches('^\\d'), names_to = "Year", values_to = "Value") %>%
     pivot_wider(values_from = Value, names_from = Indicator) %>%
@@ -331,12 +330,12 @@ pop_longitude <- subset(oxford, Indicator == "Total population") %>%
     arrange(Group) %>% 
     subset(Year <= 2021 & !is.na(Population))
 
-bm_areas <- read_csv(oxford_areas_file, col_types = "ccd") %>%
-  mutate(Location = str_to_title(Location)) %>%
-  filter(Location %in% str_to_title(pop_longitude$Location)) %>%
-  select(-Country)
-if (any(duplicated(bm_areas$Location))) stop("Multiple Oxford Economics cities have been matched with the same name")
-pop_longitude <- left_join(pop_longitude, bm_areas, by = "Location")
+  bm_areas <- read_csv(oxford_areas_file, col_types = "ccd") %>%
+    mutate(Location = str_to_title(Location)) %>%
+    filter(Location %in% str_to_title(pop_longitude$Location)) %>%
+    select(-Country)
+  if (any(duplicated(bm_areas$Location))) stop("Multiple Oxford Economics cities have been matched with the same name")
+  pop_longitude <- left_join(pop_longitude, bm_areas, by = "Location")
 } else {
   pop_longitude <- data.frame(
     Group = factor(),
@@ -443,7 +442,7 @@ pop_growth_summary <- pop_growth %>%
 print_paged_df(pop_growth_summary)
 pmap(pop_growth_summary, \(...) {
   row <- tibble(...)
-  glue("{row$Location}'s population grew by {row$change_pct} from {scales::comma(row$pop_1)} in {row$year_1} to {scales::comma(row$pop_last)} in {row$year_last}")
+  glue("{row$Location}'s population grew by {row$change_pct} from {scales::comma(row$pop_1)} in {row$year_1} to {scales::comma(row$pop_last)} in {row$year_last} for an average annual growth rate of {scales::percent(((row$pop_last/row$pop_1)^(1/(row$year_last-row$year_1)) - 1), accuracy = 0.1)}")
 }) %>% unlist() %>% cat(sep = "\n") %>% print_text()
 
 # Print pop growth tables (OUTPUT)
@@ -843,11 +842,11 @@ if (in_oxford) {
     mutate(Group, Location, Year = as.numeric(Year), Value, .keep = "used") %>%
     subset(between(Year, 2000, 2021)) %>%
     group_by(Group, Location) %>%
-    mutate(Growth = Value / lag(Value) - 1) %>%
+    mutate(Growth = Value / lag(Value) - 1) # %>%
     # slice_max(Year, n = 10) %>%
-    filter(between(Year, 2000, 2021)) %>%
-    summarize(`Employment Growth` = mean(Growth, na.rm = T), .groups = "drop") %>%
-    arrange(desc(`Employment Growth`))
+    # filter(between(Year, 2000, 2021)) %>%
+    # summarize(`Employment Growth` = mean(Growth, na.rm = T), .groups = "drop") %>%
+    # arrange(desc(`Employment Growth`))
   print_text("Employment growth in focus city for each year")
   filter(emp_growth_years, Location == city) %>% print_paged_df()
   gdp_growth <- oxford %>% subset(Indicator == "GDP, real, US$ - Total") %>%
@@ -1719,34 +1718,35 @@ print_text(flood_string("cu"))
 ```{r}
 wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*xlsx")
 if (!file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
-  pufu <- gather_flood_data("comb")
+  comb <- gather_flood_data("comb")
   pufu <- bind_rows(
     fu %>% mutate(type = "River"),
     pu %>% mutate(type = "Rainwater"),
     cu %>% mutate(type = "Coastal"),
-    pufu %>% mutate(type = "Combined")
-  )
+    comb %>% mutate(type = "Combined")) %>%
+  mutate(type = factor(type, levels = c("Combined", "River", "Rainwater", "Coastal")))
   
   pufu_plot <- pufu %>%
-    # subset(type == "Combined") %>%
     ggplot(aes(x = Year, y = uba_km2_exposed, color = type)) +
-    geom_line() +
+    geom_line(data = \(d) filter(d, type == "Combined")) +
+    geom_point(data = \(d) filter(d, type != "Combined")) +
     scale_x_continuous(
       breaks = seq(1985, 2020, 5),
       minor_breaks = seq(1985, 2021, 1)) + 
     scale_y_continuous(labels = scales::comma, limits = c(0, NA), expand = expansion(c(0, 0.05))) +
+    scale_color_manual(values = c(River = "#F8766D", Rainwater = "#619CFF", Coastal = "#00BA38", Combined = "black")) +
+    scale_linetype_manual(values = c(River = "dashed", Rainwater = "dashed", Coastal = "dashed", Combined = "solid")) +
+    scale_size_manual(values = c(River = 1, Rainwater = 1, Coastal = 1, Combined = 0.5)) +
     theme_minimal() +
     theme(legend.position = "bottom") +
     labs(title = "",#paste(city, "Built-Up Area Exposed to River & Rainwater Flooding, 1985-2015"),
-         y = bquote('Exposed'~km^2), color = "") +
+         y = bquote('Exposed'~km^2), color = "", linetype = "", size = "") +
     theme(axis.line = element_line(linewidth = .5, color = "black"),
           axis.title.x = element_blank())
   ggplot2:::print.ggplot(pufu_plot)
   ggsave("plots/wsf-pufu-plot.png", plot = pufu_plot, device = "png",
          width = 4, height = 3.5, units = "in", dpi = "print")
   
-  comb <- subset(pufu, type == "Combined")
-  # comb %>% mutate(diff = comb$uba_km2 - lag(comb$uba_km2)) %>% .$diff %>% mean(na.rm = T) 
   print_paged_df(bind_rows(head(comb, 1), tail(comb, 1)))
   print_text(paste0("In ", comb[1,1], ", ", round(comb[1,2], 2), " km^2 of the built-up area was exposed to river or surface water flooding at a minimum depth of 15 cm"))
   print_text(paste("Percentage of highest populated area exposed to combined flooding:", flood_pop_area("comb")$Percentage))
@@ -1843,26 +1843,26 @@ flood_text_all %>%
   scale_alpha_discrete(range = c(0.3, 1)) +
   scale_size_continuous(
     range = c(3, 10),
-    breaks = range(flood_text_all2$DISPLACED),
+    breaks = range(flood_text_all$DISPLACED),
     labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
   labs(y = "Year", alpha = "Severity", size = "Displaced")
-ggsave("plots/darthmouth_flood_events_alt.pdf", device = "pdf",
+ggsave("plots/darthmouth_flood_events.pdf", device = "pdf",
   width = 20, height = 5.833, units = "in", dpi = "print")
 ```
 
 ## Earthquakes
 ```{r}
 get_earthquake_data <- function() {
-library(httr2)
-# Previously, in httr, used set_cookies(`csrftoken` = "CJOWAoXjdFb7fL1Xf3asS9mj6GVJmbvvIKj365nRxupF27lO5UfkZECjtZoHLuuD")
-resps <- request("http://www.ngdc.noaa.gov/hazel/hazard-service/api/v1/earthquakes") %>%
-  req_url_query(minYear = 1900, maxYear = lubridate::year(Sys.Date())) %>%
-  req_perform_iterative(iterate_with_offset("page"))
-eq <- resps %>%
-  resps_successes() %>%
-  resps_data(\(resp) bind_rows(resp_body_json(resp)$items)) %>%
-  bind_rows()
-  return(eq)
+  library(httr2)
+  # Previously, in httr, used set_cookies(`csrftoken` = "CJOWAoXjdFb7fL1Xf3asS9mj6GVJmbvvIKj365nRxupF27lO5UfkZECjtZoHLuuD")
+  resps <- request("http://www.ngdc.noaa.gov/hazel/hazard-service/api/v1/earthquakes") %>%
+    req_url_query(minYear = 1900, maxYear = lubridate::year(Sys.Date())) %>%
+    req_perform_iterative(iterate_with_offset("page"))
+  eq <- resps %>%
+    resps_successes() %>%
+    resps_data(\(resp) bind_rows(resp_body_json(resp)$items)) %>%
+    bind_rows()
+    return(eq)
 }
 
 damages <- c("0" = "None",
@@ -1871,7 +1871,7 @@ damages <- c("0" = "None",
              "3" = "Severe",
              "4" = "Extreme")
 
-eq <- get_earthquake_data()
+if (!exists("eq")) eq <- get_earthquake_data()
 
 y_ratio <- 51498 / 13514
 # 3.324 
@@ -1908,8 +1908,7 @@ eq_text <- eq_near %>%
     line2 = paste0(eqMagnitude, "-magnitude; ", scales::label_comma(accuracy= 1)(units::drop_units(distance)), " km away"),
     line3 = damage,
     line4 = fatalities,
-    text = paste(line1, line2, line3, line4, sep = "\n"),
-    text2 = paste(line1, line2, line3, line4, sep = "; "),
+    text = paste(line1, line2, line3, line4, sep = "; "),
     above_line = (2*(row_number() %% 2) - 1)*-1) %>%
   select(BEGAN, text, line1, line2, line3, line4, above_line, distance, eqMagnitude, magXdist, location) %>%
   mutate(node_x = BEGAN + y_ratio * 1460*above_line,
@@ -1919,7 +1918,7 @@ eq_plot <-
   ggplot(eq_text, aes(y = BEGAN, x = drop_units(distance))) +
   # geom_text(data = filter(eq_text, !is.na(eqMagnitude)), aes(size = eqMagnitude, label = eqMagnitude)) +
   geom_text_repel(
-    data = \(x) slice_max(x, magXdist, n = 10), aes(label = text2),
+    data = \(x) slice_max(x, magXdist, n = 10), aes(label = text),
     size = 4, hjust = 0, direction = "y",
     xlim = c(515, 1000),
     segment.color = "grey46", segment.size = .25,
@@ -1958,7 +1957,7 @@ eq_plot <-
     legend.box.margin = margin(0, 0, -37, 15),
     plot.margin = margin(5.5, 300, 5.5, 5.5, "pt"),
     plot.background = element_rect(fill = "white", color = NULL))
-  ggsave("plots/earthquake-scatter.png", plot = eq_plot, device = "png",
+  ggsave("plots/ngdc-earthquake-scatter.png", plot = eq_plot, device = "png",
          width = 20, height = 5.833, units = "in", dpi = "print")
   ggplot2:::print.ggplot(eq_plot)
 ```
