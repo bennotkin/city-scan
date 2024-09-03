@@ -1558,7 +1558,11 @@ flood_string <- function(flood_type) {
     fire_ct_flood <- osmpt$PNT_COUNT[osmpt$source == "osm_fire" & osmpt$gridcode == 1]
     fire_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_fire" & osmpt$gridcode == 0]
     
-    flood_type_long <- if (flood_type == "fu") "riverine" else if (flood_type == "pu") "surface water" else "riverine or surface water"
+    flood_type_long <- str_replace_all(flood_type,
+      c(fu = "riverine",
+      pu = "surface water",
+      cu = "coastal",
+      comb = "riverine, surface water, or coastal"))
     
     string <- paste0(
       roads_pct, "%", " of major roads, ", 
@@ -1720,9 +1724,9 @@ wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*xlsx")
 if (!file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
   comb <- gather_flood_data("comb")
   pufu <- bind_rows(
-    fu %>% mutate(type = "River"),
-    pu %>% mutate(type = "Rainwater"),
-    cu %>% mutate(type = "Coastal"),
+    if (any(fu$uba_km2_exposed > 0)) fu %>% mutate(type = "River") else NULL,
+    if (any(pu$uba_km2_exposed > 0)) pu %>% mutate(type = "Rainwater") else NULL,
+    if (any(cu$uba_km2_exposed > 0)) cu %>% mutate(type = "Coastal") else NULL,
     comb %>% mutate(type = "Combined")) %>%
   mutate(type = factor(type, levels = c("Combined", "River", "Rainwater", "Coastal")))
   
