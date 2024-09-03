@@ -1918,6 +1918,8 @@ eq_text <- eq_near %>%
   mutate(node_x = BEGAN + y_ratio * 1460*above_line,
          node_y = above_line * (1460 * tanpi(1/6) + 466/2) * y_ratio )
 
+print_paged_df(select(st_drop_geometry(eq_text), text, location))
+
 eq_plot <-
   ggplot(eq_text, aes(y = BEGAN, x = drop_units(distance))) +
   # geom_text(data = filter(eq_text, !is.na(eqMagnitude)), aes(size = eqMagnitude, label = eqMagnitude)) +
@@ -1963,7 +1965,7 @@ eq_plot <-
     plot.background = element_rect(fill = "white", color = NULL))
   ggsave("plots/ngdc-earthquake-scatter.png", plot = eq_plot, device = "png",
          width = 20, height = 5.833, units = "in", dpi = "print")
-  ggplot2:::print.ggplot(eq_plot)
+tryCatch(ggplot2:::print.ggplot(eq_plot), error = \(e) warning(paste("Window may be too small for earthquake plot.", e)))
 ```
 
 ## Cyclones  
