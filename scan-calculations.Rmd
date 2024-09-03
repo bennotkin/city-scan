@@ -84,7 +84,7 @@ print_text(paste("Manual benchmark cities:", paste_and(bm_cities_manual)), 1)
 
 # Is city in Oxford Economics?
 oxford_locations <- readr::read_csv("../../03-multi-scan-materials/oxford-locations.csv", col_types = "c")
-# oxford_locations_in_country <- dplyr::filter(oxford_locations, Country == country)
+oxford_locations_in_country <- dplyr::filter(oxford_locations, Country == country)
 in_oxford <- city %in% oxford_locations$Location
 if (!in_oxford) {
   print_text(paste0(city, " is not in Oxford Economics. The included locations for ", country, " are ",
@@ -2074,7 +2074,7 @@ if (nrow(cyclones_near) > 0) {
 
 ## Photovoltaic Potential (PV)
 ```{r}
-files <- list.files(pv_path) %>% 
+files <- list.files(pv_path, full.names = T) %>% 
   subset(stringr::str_detect(., ".tif$|.asc$"))
 
 aoi_largest <- vect("AOI") %>% .[which.max(expanse(.)),,] %>% project("EPSG:4326")
