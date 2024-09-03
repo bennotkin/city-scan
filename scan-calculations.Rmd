@@ -84,8 +84,8 @@ print_text(paste("Manual benchmark cities:", paste_and(bm_cities_manual)), 1)
 
 # Is city in Oxford Economics?
 oxford_locations <- readr::read_csv("../../03-multi-scan-materials/oxford-locations.csv", col_types = "c")
-oxford_locations_in_country <- dplyr::filter(oxford_locations, Country == country)
-in_oxford <- city %in% oxford_locations_in_country$Location
+# oxford_locations_in_country <- dplyr::filter(oxford_locations, Country == country)
+in_oxford <- city %in% oxford_locations$Location
 if (!in_oxford) {
   print_text(paste0(city, " is not in Oxford Economics. The included locations for ", country, " are ",
                     paste_and(oxford_locations_in_country$Location),
@@ -1548,7 +1548,7 @@ flood_string <- function(flood_type) {
     tryCatch(error = function(e) return(data.frame(OID = 0, gridcode = 0, LENGTH = 0, PERCENTAGE = 0)))
   
   if (is.null(osmpt)) return("No OSMPT data.") else {
-    roads_pct <- major_roads$PERCENTAGE[major_roads$gridcode == 1] %>% round(0)
+    roads_pct <- (major_roads$ratio[major_roads$gridcode == 1] * 100) %>% round(0)
     police_ct_flood <- osmpt$PNT_COUNT[osmpt$source == "osm_police" & osmpt$gridcode == 1]
     police_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_police" & osmpt$gridcode == 0]
     health_ct_flood <- osmpt$PNT_COUNT[osmpt$source == "osm_health" & osmpt$gridcode == 1]
@@ -2077,11 +2077,12 @@ if (nrow(cyclones_near) > 0) {
 files <- list.files(pv_path) %>% 
   subset(stringr::str_detect(., ".tif$|.asc$"))
 
-aoi <- read_sf("AOI") %>% st_transform("EPSG:4326")
+aoi <- vect("AOI") %>% project("EPSG:4326")
+aoi_ext <- ext(aoi)
 
 monthly_pv <- lapply(files, function(f) {
   m <- f %>% substr(7, 8) %>% as.numeric()
-  month_country <- terra::rast(paste0(pv_path, f))
+  month_country <- terra::rast(paste0(pv_path, f, win = aoi_ext))
   month <- terra::extract(month_country, aoi, include_area = T) %>% .[[2]]
   max <- max(month, na.rm = T)
   min <- min(month, na.rm = T)
