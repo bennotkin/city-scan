@@ -2084,7 +2084,7 @@ all_months <- lapply(files, \(f) rast(f, win = aoi_ext, snap = "out")) %>% purrr
 monthly_pv_wide <- extract(all_months, aoi_largest, weights = T, fun = mean)
 monthly_pv <- t(monthly_pv_wide[,-1]) %>%
   as_tibble(rownames = "month") %>%
-  rename(mean.Date() = V1) %>%
+  rename(mean = V1) %>%
   mutate(month = as.numeric(substr(month, 7, 8)))
 
 monthly_pv %>% print_paged_df()
