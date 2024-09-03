@@ -2077,27 +2077,22 @@ if (nrow(cyclones_near) > 0) {
 files <- list.files(pv_path) %>% 
   subset(stringr::str_detect(., ".tif$|.asc$"))
 
-aoi <- vect("AOI") %>% project("EPSG:4326")
-aoi_ext <- ext(aoi)
+aoi_largest <- vect("AOI") %>% .[which.max(expanse(.)),,] %>% project("EPSG:4326")
+aoi_ext <- ext(aoi_largest)
 
-monthly_pv <- lapply(files, function(f) {
-  m <- f %>% substr(7, 8) %>% as.numeric()
-  month_country <- terra::rast(paste0(pv_path, f, win = aoi_ext))
-  month <- terra::extract(month_country, aoi, include_area = T) %>% .[[2]]
-  max <- max(month, na.rm = T)
-  min <- min(month, na.rm = T)
-  mean <- mean(month, na.rm = T)
-  sum <- sum(month, na.rm = T)
-  return(c(month = m, max = max, min = min, mean = mean, sum = sum))
-}) %>% bind_rows()
+all_months <- lapply(files, \(f) rast(f, win = aoi_ext, snap = "out")) %>% purrr::reduce(c)
+monthly_pv_wide <- extract(all_months, aoi_largest, weights = T, fun = mean)
+monthly_pv <- t(monthly_pv_wide[,-1]) %>%
+  as_tibble(rownames = "month") %>%
+  rename(mean.Date() = V1) %>%
+  mutate(month = as.numeric(substr(month, 7, 8)))
 
-monthly_pv
+monthly_pv %>% print_paged_df()
 
 monthly_pv %>%
-  mutate(daily = mean) %>%
   # Data for some countries is in format of month totals
-  # mutate(daily = mean/lubridate::days_in_month(month)) %>%
-  ggplot(aes(x = month, y = daily)) +
+  # mutate(mean = mean/lubridate::days_in_month(month)) %>%
+  ggplot(aes(x = month, y = mean)) +
   annotate("text", x = 1, y = 4.6, label = "Excellent Conditions", vjust = 0, hjust = 0, color = "dark grey") +
   annotate("text", x = 1, y = 3.6, label = "Favorable Conditions", vjust = 0, hjust = 0, color = "dark grey") +
   geom_line() +
