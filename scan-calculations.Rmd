@@ -24,7 +24,8 @@ librarian::shelf(
   terra,
   dplyr,
   glue,
-  purrr
+  purrr,
+  zoo
 )
 
 country_groups <- read_csv("https://raw.githubusercontent.com/compoundrisk/monitor/databricks/src/country-groups.csv")
@@ -1280,7 +1281,7 @@ if (in_oxford) {
 ## WSF
 ### Urban built-up area
 ```{r}
-wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*(csv|xlsx)") 
+wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf(?!.*tracker).*(csv|xlsx)") 
 if (!file.exists(wsf_file)) {
   warning("No WSF.xlsx file. Should there be? Check for different file name.")
 } else {
@@ -1315,6 +1316,47 @@ if (!file.exists(wsf_file)) {
   
   print_paged_df(wsf)
   write_csv(wsf, "data-sharing/04-tabular-data/urban-extent-and-change.csv")
+}
+```
+
+WSF Tracker
+
+```{r}
+wsf_tracker_file <- str_subset(list.files("Stats", full.names = T), "wsf_tracker.*(csv|xlsx)") 
+if (!file.exists(wsf_tracker_file)) {
+  warning("No WSF tracker file file. Should there be? Check for different file name.")
+} else {
+  # Urban built-up area ----
+  if (str_detect(wsf_tracker_file, "xlsx$")) wsf_tracker <- read_xlsx(wsf_tracker_file, sheet = "WSF")
+  if (str_detect(wsf_tracker_file, "csv$")) wsf_tracker <- read_csv(wsf_tracker_file, col_types = "cd")
+  wsf_tracker <- wsf_tracker %>%
+    mutate(date = zoo::as.yearmon(date)) %>%
+    select(date, uba_km2 = any_of(c("AREA_sq_km", "cumulative sq km"))) %>%
+    mutate(growth_pct = (uba_km2 / lag(uba_km2) - 1), growth_km2 = uba_km2 - lag(uba_km2))
+  uba_tracker_plot <- wsf_tracker %>%
+    ggplot() +
+    geom_line(aes(x = date, y = uba_km2)) +
+    # scale_x_continuous(
+    #   breaks = seq(1985, 2020, 5),
+    #   minor_breaks = seq(1985, 2021, 1)) + 
+    scale_y_continuous(labels = scales::comma, limits = c(0, max(wsf_tracker$uba_km2)), expand = c(0, NA)) +
+    theme_minimal() +
+    labs(title = "",#paste(city, "Urban Built-up Area, 1985-2015"),
+         y = bquote('Urban built-up area,'~km^2)) +
+    theme(axis.line = element_line(linewidth = .5, color = "black"))
+  ggsave("plots/wsf-uba-tracker-plot.png", plot = uba_tracker_plot, device = "png",
+         width = 4, height = 3.5, units = "in", dpi = "print")
+  ggplot2:::print.ggplot(uba_tracker_plot)
+  
+  first_area <- wsf_tracker$uba_km2[1]
+  latest_area <- tail(wsf_tracker$uba_km2, 1)
+  first_date <- wsf_tracker$date[1]
+  latest_date <- tail(wsf_tracker$date, 1)
+  pct_growth <- 100 * (latest_area - first_area)/first_area
+  print_text(paste0("The city's built-up area grew from ", round(first_area, 2), " km^2 in ", first_date, " to ", round(latest_area, 2), " in ", latest_date, " for ", round(pct_growth, 2), "% growth"))
+  
+  print_paged_df(wsf_tracker)
+  write_csv(wsf_tracker, "data-sharing/04-tabular-data/urban-extent-and-change-tracker.csv")
 }
 ```
 
@@ -1548,7 +1590,7 @@ flood_string <- function(flood_type) {
     tryCatch(error = function(e) return(data.frame(OID = 0, gridcode = 0, LENGTH = 0, PERCENTAGE = 0)))
   
   if (is.null(osmpt)) return("No OSMPT data.") else {
-    roads_pct <- major_roads$PERCENTAGE[major_roads$gridcode == 1] %>% round(0)
+    roads_pct <- (major_roads$ratio[major_roads$gridcode == 1] * 100) %>% round(0)
     police_ct_flood <- osmpt$PNT_COUNT[osmpt$source == "osm_police" & osmpt$gridcode == 1]
     police_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_police" & osmpt$gridcode == 0]
     health_ct_flood <- osmpt$PNT_COUNT[osmpt$source == "osm_health" & osmpt$gridcode == 1]
@@ -1558,7 +1600,11 @@ flood_string <- function(flood_type) {
     fire_ct_flood <- osmpt$PNT_COUNT[osmpt$source == "osm_fire" & osmpt$gridcode == 1]
     fire_ct <- osmpt$PNT_COUNT[osmpt$source == "osm_fire" & osmpt$gridcode == 0]
     
-    flood_type_long <- if (flood_type == "fu") "riverine" else if (flood_type == "pu") "surface water" else "riverine or surface water"
+    flood_type_long <- str_replace_all(flood_type,
+      c(fu = "riverine",
+      pu = "surface water",
+      cu = "coastal",
+      comb = "riverine, surface water, or coastal"))
     
     string <- paste0(
       roads_pct, "%", " of major roads, ", 
@@ -1720,9 +1766,9 @@ wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*xlsx")
 if (!file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
   comb <- gather_flood_data("comb")
   pufu <- bind_rows(
-    fu %>% mutate(type = "River"),
-    pu %>% mutate(type = "Rainwater"),
-    cu %>% mutate(type = "Coastal"),
+    if (any(fu$uba_km2_exposed > 0)) fu %>% mutate(type = "River") else NULL,
+    if (any(pu$uba_km2_exposed > 0)) pu %>% mutate(type = "Rainwater") else NULL,
+    if (any(cu$uba_km2_exposed > 0)) cu %>% mutate(type = "Coastal") else NULL,
     comb %>% mutate(type = "Combined")) %>%
   mutate(type = factor(type, levels = c("Combined", "River", "Rainwater", "Coastal")))
   
@@ -1830,22 +1876,24 @@ flood_text_all %>%
   scale_y_reverse(
     # expand = c(0,0),
     breaks = seq(1985, 2020, by = 5), minor_breaks = 1985:2022 - 0.5) +
+  scale_alpha_discrete(range = c(0.3, 1)) +
+  scale_size_continuous(
+    range = c(3, 10),
+    breaks = range(flood_text_all$DISPLACED),
+    labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
+  labs(y = "Year", alpha = "Severity", size = "Displaced") +
   theme_minimal() +
   coord_cartesian(clip = 'off') +
   theme(
+    axis.line = element_line(linewidth = .5, color = "black"),
     panel.grid.major = element_blank(),
     panel.grid.minor = element_line(linewidth = .5, color = "grey92"),
     axis.text = element_text(size = 12),
     axis.title.y = element_text(size = 12),
     axis.title.x = element_blank(),
     legend.position = "bottom",
-    plot.margin = margin(5.5, 250, 5.5, 5.5, "pt")) +
-  scale_alpha_discrete(range = c(0.3, 1)) +
-  scale_size_continuous(
-    range = c(3, 10),
-    breaks = range(flood_text_all$DISPLACED),
-    labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
-  labs(y = "Year", alpha = "Severity", size = "Displaced")
+    plot.margin = margin(5.5, 300, 5.5, 5.5, "pt"),
+    plot.background = element_rect(fill = "white", color = NULL))
 ggsave("plots/darthmouth_flood_events.pdf", device = "pdf",
   width = 20, height = 5.833, units = "in", dpi = "print")
 ```
@@ -1893,7 +1941,8 @@ eq_near <- eq %>%
       distance < units::set_units(500, km))
 eq_text <- eq_near %>%
   mutate(
-    location = gsub("([\\s-][A-Z])([A-Z]*)", "\\1\\L\\2", locationName, perl = T) %>% str_extract("[^:][\\s]+.*") %>% trimws(),
+    location = gsub("([\\s-][A-Z])([A-Z]*)", "\\1\\L\\2", locationName, perl = T) %>% 
+      str_extract("[^:][\\s]+.*") %>% trimws(),
     fatalities = paste(scales::label_comma()(deaths), "fatalities"),
     fatalities = str_replace_all(fatalities,
                                  c("1 fatalities" = "1 fatality",
@@ -1913,6 +1962,8 @@ eq_text <- eq_near %>%
   select(BEGAN, text, line1, line2, line3, line4, above_line, distance, eqMagnitude, magXdist, location) %>%
   mutate(node_x = BEGAN + y_ratio * 1460*above_line,
          node_y = above_line * (1460 * tanpi(1/6) + 466/2) * y_ratio )
+
+print_paged_df(select(st_drop_geometry(eq_text), text, location))
 
 eq_plot <-
   ggplot(eq_text, aes(y = BEGAN, x = drop_units(distance))) +
@@ -1938,13 +1989,13 @@ eq_plot <-
     minor_breaks = seq.Date(as.Date("1900-01-01"), as.Date("2030-01-01"), by = "5 years"),
     labels = seq(1900, 2025, by = 20),
     trans = c("date", "reverse")) +
+  scale_size(range = c(1, 6)) + # max_size = 7,
+  scale_color_manual(values = c(" " = "grey")) +
   labs(
     x = paste("Distance from", city),
     y = "Year",
     size = "Magnitude",
     color = "Magnitude unavailable") +
-  scale_size(range = c(1, 6)) + # max_size = 7,
-  scale_color_manual(values = c(" " = "grey")) +
   theme_minimal() +
   coord_cartesian(clip = 'off') +
   theme(
@@ -1959,7 +2010,7 @@ eq_plot <-
     plot.background = element_rect(fill = "white", color = NULL))
   ggsave("plots/ngdc-earthquake-scatter.png", plot = eq_plot, device = "png",
          width = 20, height = 5.833, units = "in", dpi = "print")
-  ggplot2:::print.ggplot(eq_plot)
+tryCatch(ggplot2:::print.ggplot(eq_plot), error = \(e) warning(paste("Window may be too small for earthquake plot.", e)))
 ```
 
 ## Cyclones  
@@ -2070,26 +2121,23 @@ if (nrow(cyclones_near) > 0) {
 
 ## Photovoltaic Potential (PV)
 ```{r}
-files <- list.files(pv_path) %>% 
+files <- list.files(pv_path, full.names = T) %>% 
   subset(stringr::str_detect(., ".tif$|.asc$"))
 
-aoi <- read_sf("AOI") %>% st_transform("EPSG:4326")
+aoi_largest <- vect("AOI") %>% .[which.max(expanse(.)),,] %>% project("EPSG:4326")
 
 monthly_pv <- rast("/vsigs/city-scan-global-data/globalsolar/PVOUT-monthly.tif") %>%
-  terra::extract(aoi, include_area = T) %>%
+  terra::extract(aoi_largest, include_area = T) %>%
   .[,-1] %>% as.matrix() %>%
   { data.frame(
     max = matrixStats::rowMaxs(.),
     min = matrixStats::rowMins(.),
     mean = rowMeans(.)) }
 
-monthly_pv
+monthly_pv %>% print_paged_df()
 
 monthly_pv %>%
-  mutate(daily = mean) %>%
-  # Data for some countries is in format of month totals
-  # mutate(daily = mean/lubridate::days_in_month(month)) %>%
-  ggplot(aes(x = month, y = daily)) +
+  ggplot(aes(x = month, y = mean)) +
   annotate("text", x = 1, y = 4.6, label = "Excellent Conditions", vjust = 0, hjust = 0, color = "dark grey") +
   annotate("text", x = 1, y = 3.6, label = "Favorable Conditions", vjust = 0, hjust = 0, color = "dark grey") +
   geom_line() +
