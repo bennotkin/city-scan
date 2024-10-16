@@ -2126,13 +2126,16 @@ files <- list.files(pv_path, full.names = T) %>%
 
 aoi_largest <- vect("AOI") %>% .[which.max(expanse(.)),,] %>% project("EPSG:4326")
 
+setGDALconfig("GS_NO_SIGN_REQUEST=YES")
 monthly_pv <- rast("/vsigs/city-scan-global-data/globalsolar/PVOUT-monthly.tif") %>%
   terra::extract(aoi_largest, include_area = T) %>%
   .[,-1] %>% as.matrix() %>%
   { data.frame(
-    max = matrixStats::rowMaxs(.),
-    min = matrixStats::rowMins(.),
-    mean = rowMeans(.)) }
+    month = 1:12,
+    max = matrixStats::colMaxs(.),
+    min = matrixStats::colMins(.),
+    mean = colMeans(.)
+    )}
 
 monthly_pv %>% print_paged_df()
 
@@ -2152,7 +2155,6 @@ monthly_pv %>%
     axis.title.x = element_blank(), 
     axis.line = element_line(linewidth = .5, color = "black"),
     panel.grid.minor.x = element_blank())
-
 ggsave("plots/monthly-pv.png", device = "png",
        width = 4, height = 3.5, units = "in", dpi = "print")
 ```
