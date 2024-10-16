@@ -2075,16 +2075,13 @@ files <- list.files(pv_path) %>%
 
 aoi <- read_sf("AOI") %>% st_transform("EPSG:4326")
 
-monthly_pv <- lapply(files, function(f) {
-  m <- f %>% substr(7, 8) %>% as.numeric()
-  month_country <- terra::rast(paste0(pv_path, f))
-  month <- terra::extract(month_country, aoi, include_area = T) %>% .[[2]]
-  max <- max(month, na.rm = T)
-  min <- min(month, na.rm = T)
-  mean <- mean(month, na.rm = T)
-  sum <- sum(month, na.rm = T)
-  return(c(month = m, max = max, min = min, mean = mean, sum = sum))
-}) %>% bind_rows()
+monthly_pv <- rast("/vsigs/city-scan-global-data/globalsolar/PVOUT-monthly.tif") %>%
+  terra::extract(aoi, include_area = T) %>%
+  .[,-1] %>% as.matrix() %>%
+  { data.frame(
+    max = matrixStats::rowMaxs(.),
+    min = matrixStats::rowMins(.),
+    mean = rowMeans(.)) }
 
 monthly_pv
 
