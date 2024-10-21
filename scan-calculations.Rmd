@@ -2121,9 +2121,6 @@ if (nrow(cyclones_near) > 0) {
 
 ## Photovoltaic Potential (PV)
 ```{r}
-files <- list.files(pv_path, full.names = T) %>% 
-  subset(stringr::str_detect(., ".tif$|.asc$"))
-
 aoi_largest <- vect("AOI") %>% .[which.max(expanse(.)),,] %>% project("EPSG:4326")
 
 setGDALconfig("GS_NO_SIGN_REQUEST=YES")
