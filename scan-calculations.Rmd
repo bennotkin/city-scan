@@ -187,7 +187,7 @@ get_de_pop_growth <- function(city, country = country) {
   table_ids = c("citysection", "largecities", "adminareas")
   for (id in table_ids) {
     de <- read_html(url) %>%
-      html_node("section#citysection") %>%
+      html_node(paste0("section#", table_id)) %>%
       html_node("table") %>%
       html_table()
       if (any(str_detect(tolatin(de$Name), tolatin(city)))) break
@@ -257,7 +257,6 @@ oxford_locations %>%
   subset(Location != Country & !str_detect(Location, "Total")) %>%
   .$Location
 }
-
 
 # Select benchmark cities
 bm_cities <- oxford_full %>%
@@ -1281,7 +1280,7 @@ if (in_oxford) {
 ## WSF
 ### Urban built-up area
 ```{r}
-wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf(?!.*tracker).*(csv|xlsx)") 
+wsf_file <- str_subset(list.files("Stats", full.names = T), "(?<!flood_)wsf(?!.*tracker).*(csv|xlsx)") 
 if (!file.exists(wsf_file)) {
   warning("No WSF.xlsx file. Should there be? Check for different file name.")
 } else {
@@ -1319,18 +1318,19 @@ if (!file.exists(wsf_file)) {
 }
 ```
 
-WSF Tracker
+### WSF Tracker
 
 ```{r}
 wsf_tracker_file <- str_subset(list.files("Stats", full.names = T), "wsf_tracker.*(csv|xlsx)") 
-if (!file.exists(wsf_tracker_file)) {
+if (length(wsf_tracker_file) == 0) {
   warning("No WSF tracker file file. Should there be? Check for different file name.")
 } else {
   # Urban built-up area ----
   if (str_detect(wsf_tracker_file, "xlsx$")) wsf_tracker <- read_xlsx(wsf_tracker_file, sheet = "WSF")
-  if (str_detect(wsf_tracker_file, "csv$")) wsf_tracker <- read_csv(wsf_tracker_file, col_types = "cd")
+  if (str_detect(wsf_tracker_file, "csv$")) wsf_tracker <- read_csv(wsf_tracker_file, col_types = "cdd")
   wsf_tracker <- wsf_tracker %>%
-    mutate(date = zoo::as.yearmon(date)) %>%
+    # mutate(date = zoo::as.yearmon(date)) %>%
+    mutate(date = zoo::as.yearmon(paste(year, month, sep = "-"))) %>%
     select(date, uba_km2 = any_of(c("AREA_sq_km", "cumulative sq km"))) %>%
     mutate(growth_pct = (uba_km2 / lag(uba_km2) - 1), growth_km2 = uba_km2 - lag(uba_km2))
   uba_tracker_plot <- wsf_tracker %>%
@@ -1618,24 +1618,21 @@ flood_string <- function(flood_type) {
   }
 }
 
+flood_file <- str_subset(list.files("Stats", full.names = T), "flood.*csv")
+wsf_flood <- full_join(wsf, read_csv(flood_file), by = c("Year" = "year")) %>%
+  rowwise() %>%
+  mutate(combined_2020 = sum(c_across(contains("2020")))) %>% ungroup()
+
 gather_flood_data <- function(flood_type) {
-  wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*xlsx") 
+  df <- select(wsf_flood, Year, uba_km2, uba_km2_exposed = contains(flood_type))
+  if ("uba_km2_exposed" %ni% names(df)) {
+    no_data_df <- tibble(Year = wsf$Year, uba_km2_exposed = 0)
+    return(no_data_df)
+  }
   df <- 
-    tryCatch(
-      read_excel(wsf_file, sheet = toupper(flood_type)) %>%
-        select(Year = Value, uba_km2 = AREA_sq_km),
-      error = \(e) {
-        warning(glue('Error on gather_flood_type_data("{flood_type}"): {e}'))
-        no_data_df <- tibble(Year = wsf$Year, uba_km2 = 0)
-        return(no_data_df)
-      })
-  df <- full_join(df, wsf, by = "Year", suffix = c("_exposed", "_wsf")) %>%
-    select(-growth_pct, -growth_km2) %>%
-    arrange(Year) %>%
-    fill(uba_km2_exposed) %>%
-    mutate(
-      growth_pct = scales::percent(uba_km2_exposed / lag(uba_km2_exposed) - 1, accuracy = 0.01),
-      percent_uba_exposed = scales::percent(uba_km2_exposed/uba_km2_wsf, accuracy = 0.01))
+      mutate(df,
+        growth_pct = scales::percent(uba_km2_exposed / lag(uba_km2_exposed) - 1, accuracy = 0.01),
+        percent_uba_exposed = scales::percent(uba_km2_exposed/uba_km2, accuracy = 0.01))
   return(df)
 }
 flood_pop_area <- function(flood_type) {
@@ -1660,9 +1657,8 @@ flood_pop_area <- function(flood_type) {
 
 ### Fluvial
 ```{r}
-wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*xlsx")
 if (length(wsf_file) == 0 || !file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
-  fu <- gather_flood_data("fu")
+  fu <- gather_flood_data("fluvial")
   
   fu_plot <- fu %>%
     ggplot +
@@ -1681,7 +1677,8 @@ if (length(wsf_file) == 0 || !file.exists(wsf_file)) warning("No WSF.xlsx file."
          width = 4, height = 3.5, units = "in", dpi = "print")
 
   print_paged_df(bind_rows(head(fu, 1), tail(fu, 1)))
-  print_text(paste0("In ", fu[1,1], ", ", round(fu[1,2], 2), " km^2 of the built-up area was exposed to river flooding at a minimum depth of 15 cm"))
+  print_text(glue("In {fu$Year[1]}, {round(fu$uba_km2_exposed[1], 2)} km^2 of the built-up area ({fu$percent_uba_exposed[1]}) was exposed to river flooding at a minimum depth of 15 cm"))
+  print_text(glue("In {tail(fu$Year, 1)}, {round(tail(fu$uba_km2_exposed, 1), 2)} km^2 of the built-up area ({tail(fu$percent_uba_exposed, 1)}) was exposed"))
   print_text(paste("Percentage of highest populated area exposed to fluvial flooding:", flood_pop_area("fu")$Percentage))
 }
 print_text(flood_string("fu"))
@@ -1689,9 +1686,8 @@ print_text(flood_string("fu"))
 
 ### Pluvial
 ```{r}
-wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*xlsx") 
 if (length(wsf_file) == 0 || !file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
-  pu <- gather_flood_data("pu")
+  pu <- gather_flood_data("pluvial")
   pu_plot <- pu %>%
     ggplot +
     geom_line(aes(x = Year, y = uba_km2_exposed)) +
@@ -1723,7 +1719,8 @@ if (length(wsf_file) == 0 || !file.exists(wsf_file)) warning("No WSF.xlsx file."
   
   # print_paged_df(pu)
   print_paged_df(bind_rows(head(pu, 1), tail(pu, 1)))
-  print_text(paste0("In ", pu[1,1], ", ", round(pu[1,2], 2), " km^2 of the built-up area was exposed to surface water flooding at a minimum depth of 15 cm"))
+  print_text(glue("In {pu$Year[1]}, {round(pu$uba_km2_exposed[1], 2)} km^2 of the built-up area ({pu$percent_uba_exposed[1]}) was exposed to river flooding at a minimum depth of 15 cm"))
+  print_text(glue("In {tail(pu$Year, 1)}, {round(tail(pu$uba_km2_exposed, 1), 2)} km^2 of the built-up area ({tail(pu$percent_uba_exposed, 1)}) was exposed"))
   print_text(paste("Percentage of highest populated area exposed to pluvial flooding:", flood_pop_area("pu")$Percentage))
   
   # pu %>% mutate(diff = pu$uba_km2 - lag(pu$uba_km2)) %>% .$diff %>% mean(na.rm = T) 
@@ -1733,11 +1730,10 @@ print_text(flood_string("pu"))
 
 ### Coastal
 ```{r}
-wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*xlsx")
-if (!file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
-  cu <- gather_flood_data("cu")
+if (length(wsf_file) == 0 || !file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
+  cu <- gather_flood_data("coastal")
   cu_plot <- cu %>%
-    ggplot +
+    ggplot() +
     geom_line(aes(x = Year, y = uba_km2_exposed)) +
     scale_x_continuous(
       breaks = seq(1985, 2020, 5),
@@ -1753,7 +1749,8 @@ if (!file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
          width = 4, height = 3.5, units = "in", dpi = "print")
   
   print_paged_df(bind_rows(head(cu, 1), tail(cu, 1)))
-  print_text(paste0("In ", cu[1,1], ", ", round(cu[1,2], 2), " km^2 of the built-up area was exposed to coastal flooding at a minimum depth of 15 cm"))
+  print_text(glue("In {cu$Year[1]}, {round(cu$uba_km2_exposed[1], 2)} km^2 of the built-up area ({cu$percent_uba_exposed[1]}) was exposed to river flooding at a minimum depth of 15 cm"))
+  print_text(glue("In {tail(cu$Year, 1)}, {round(tail(cu$uba_km2_exposed, 1), 2)} km^2 of the built-up area ({tail(cu$percent_uba_exposed, 1)}) was exposed"))
   print_text(paste("Percentage of highest populated area exposed to coastal flooding:", flood_pop_area("cu")$Percentage))
 
 }
@@ -1762,9 +1759,8 @@ print_text(flood_string("cu"))
 
 ### Combined Fluvial, Pluvial & Coastal
 ```{r}
-wsf_file <- str_subset(list.files("Stats", full.names = T), "wsf.*xlsx")
-if (!file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
-  comb <- gather_flood_data("comb")
+if (length(wsf_file) == 0 || !file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
+  comb <- gather_flood_data("combined")
   pufu <- bind_rows(
     if (any(fu$uba_km2_exposed > 0)) fu %>% mutate(type = "River") else NULL,
     if (any(pu$uba_km2_exposed > 0)) pu %>% mutate(type = "Rainwater") else NULL,
@@ -1794,7 +1790,8 @@ if (!file.exists(wsf_file)) warning("No WSF.xlsx file.") else {
          width = 4, height = 3.5, units = "in", dpi = "print")
   
   print_paged_df(bind_rows(head(comb, 1), tail(comb, 1)))
-  print_text(paste0("In ", comb[1,1], ", ", round(comb[1,2], 2), " km^2 of the built-up area was exposed to river or surface water flooding at a minimum depth of 15 cm"))
+  print_text(glue("In {comb$Year[1]}, {round(comb$uba_km2_exposed[1], 2)} km^2 of the built-up area ({comb$percent_uba_exposed[1]}) was exposed to river flooding at a minimum depth of 15 cm"))
+  print_text(glue("In {tail(comb$Year, 1)}, {round(tail(comb$uba_km2_exposed, 1), 2)} km^2 of the built-up area ({tail(comb$percent_uba_exposed, 1)}) was exposed")) 
   print_text(paste("Percentage of highest populated area exposed to combined flooding:", flood_pop_area("comb")$Percentage))
 }
 print_text(flood_string("comb"))
