@@ -1475,7 +1475,7 @@ print_text(paste0("The next largest land classes are ", lc2, " (", lc2_pct, "%) 
 
 ### Elevation
 ```{r}
-elevation <- read_csv(str_subset(list.files("Stats", full = T), "elevation"), col_types = "cd") %>%
+elevation <- read_csv(str_subset(list.files("Stats", full = T), "elevation.csv"), col_types = "cd") %>%
   subset(!is.na(Bin)) %>%
   mutate(Elevation = as.numeric(str_replace(Bin, "-.*", "")),
          Bin = factor(Bin, levels = Bin),
@@ -1499,11 +1499,11 @@ elevation <- read_csv(str_subset(list.files("Stats", full = T), "elevation"), co
 
 elevation_names <- elevation$Bin
 elevation_colors <- c(
-  "#f5c4c0",
-  "#f19bb4",
-  "#ec5fa1",
-  "#c20b8a",
-  "#762175") %>%
+  "#F2D7D3",
+  "#DCBAC5",
+  "#C59FB8",
+  "#AF84A9",
+  "#97679C") %>%
   setNames(elevation_names)
 
 # elevation2 %>%
@@ -1564,11 +1564,11 @@ slope <- read_csv(str_subset(list.files("Stats", full = T), "slope"), col_types 
 
 slope_names <- arrange(slope, Slope)$Bin
 slope_colors <- c(
-  "#ffffd4",
-  "#fed98e",
-  "#fe9929",
-  "#d95f0e",
-  "#993404") %>%
+  "#F9F9DF",
+  "#E8D6B9",
+  "#D5B495",
+  "#BE9172",
+  "#A86E50") %>%
   setNames(slope_names)
 
 ggdonut(slope, "Bin", "percent", colors = slope_colors, title = "Slope")
@@ -1689,7 +1689,7 @@ if (length(wsf_file) == 0 || !file.exists(wsf_file)) warning("No WSF.xlsx file."
   fu <- gather_flood_data("fluvial")
   
   fu_plot <- fu %>%
-    ggplot +
+    ggplot() +
     geom_line(aes(x = Year, y = uba_km2_exposed)) +
     scale_x_continuous(
       breaks = seq(1985, 2020, 5),
@@ -1898,6 +1898,7 @@ flood_text_all %>%
     breaks = month_labels - 15, minor_breaks = c(0, month_labels)) +
   scale_y_reverse(
     # expand = c(0,0),
+    limits = c(2020, 1985),
     breaks = seq(1985, 2020, by = 5), minor_breaks = 1985:2022 - 0.5) +
   scale_alpha_discrete(range = c(0.3, 1)) +
   scale_size_continuous(
@@ -1918,7 +1919,7 @@ flood_text_all %>%
     plot.margin = margin(5.5, 300, 5.5, 5.5, "pt"),
     plot.background = element_rect(fill = "white", color = NULL))
 ggsave("plots/darthmouth_flood_events.pdf", device = "pdf",
-  width = 20, height = 5.833, units = "in", dpi = "print")
+  width = 15, height = 4.36, units = "in", dpi = "print")
 ```
 
 ## Earthquakes
@@ -1967,9 +1968,8 @@ eq_text <- eq_near %>%
     location = gsub("([\\s-][A-Z])([A-Z]*)", "\\1\\L\\2", locationName, perl = T) %>% 
       str_extract("[^:][\\s]+.*") %>% trimws(),
     fatalities = paste(scales::label_comma()(deaths), "fatalities"),
-    fatalities = str_replace_all(fatalities,
-                                 c("1 fatalities" = "1 fatality",
-                                   "NA fatalities" = "")),
+    fatalities = str_replace_all(
+      fatalities, c("1 fatalities" = "1 fatality", "NA fatalities" = "")),
     damage = paste(damages[as.character(damageAmountOrder)], "damage"),
     day = replace_na(day, 1),
     BEGAN = as.Date(paste(year, month, day, sep='-'))) %>%
@@ -1977,10 +1977,10 @@ eq_text <- eq_near %>%
   mutate(
     line1 = toupper(paste(lubridate::month(BEGAN, label = T, abbr = F), lubridate::year(BEGAN))),
     # line2 = paste0(ifelse(!is.na(location), paste0(location, " "), "") , "(", eqMagnitude, ")"),
-    line2 = paste0(eqMagnitude, "-magnitude; ", scales::label_comma(accuracy= 1)(units::drop_units(distance)), " km away"),
+    line2 = paste0("M", eqMagnitude, "; ", scales::label_comma(accuracy= 1)(units::drop_units(distance)), " km away"),
     line3 = damage,
     line4 = fatalities,
-    text = paste(line1, line2, line3, line4, sep = "; "),
+    text = paste(line1, line2, line3, line4, sep = "; ") %>% str_replace_all(c("; ;" = ";", "; $" = "")),
     above_line = (2*(row_number() %% 2) - 1)*-1) %>%
   select(BEGAN, text, line1, line2, line3, line4, above_line, distance, eqMagnitude, magXdist, location) %>%
   mutate(node_x = BEGAN + y_ratio * 1460*above_line,
@@ -1997,28 +1997,29 @@ eq_plot <-
     xlim = c(515, 1000),
     segment.color = "grey46", segment.size = .25,
     segment.curvature = 1e-20, segment.square = T) +
-  geom_point(data = \(x) slice_max(x, magXdist, n = 10), aes(size = eqMagnitude, color = "grey46")) +
-  geom_point(data = \(x) filter(x, !is.na(eqMagnitude)), aes(size = eqMagnitude), shape = 1) +
-  geom_point(data = \(x) filter(x, is.na(eqMagnitude)), shape = 1, aes(color = "grey92")) +
+  geom_point(data = \(x) filter(x, !is.na(eqMagnitude)), aes(size = eqMagnitude), shape = 1, color = "black") +
+  geom_point(data = \(x) slice_max(x, magXdist, n = 10), aes(size = eqMagnitude), color = "grey46") +
+  geom_point(data = \(x) filter(x, is.na(eqMagnitude)), shape = 1, color = "grey92") +
   scale_x_continuous(
     limits = c(0, 500),
     labels = \(x) paste(x, "km"),
     breaks = seq(0, 500, 100),
     expand = expansion(c(0, 0))) +
   scale_y_continuous(
-    # limits = c(NA, as.Date("1900-01-01")),
+    limits = c(Sys.Date(), as.Date("1900-01-01")),
     # expand = expansion(c(0, 0.05)),
     breaks = seq.Date(as.Date("1900-01-01"), Sys.Date(), by = "20 years"),
     minor_breaks = seq.Date(as.Date("1900-01-01"), as.Date("2030-01-01"), by = "5 years"),
     labels = seq(1900, 2025, by = 20),
     trans = c("date", "reverse")) +
   scale_size(range = c(1, 6)) + # max_size = 7,
-  scale_color_manual(values = c(" " = "grey")) +
+  # scale_color_manual(values = c(" " = "grey"), guide = "none") +
   labs(
     x = paste("Distance from", city),
     y = "Year",
     size = "Magnitude",
-    color = "Magnitude unavailable") +
+    # color = "Magnitude unavailable"
+    ) +
   theme_minimal() +
   coord_cartesian(clip = 'off') +
   theme(
@@ -2032,7 +2033,7 @@ eq_plot <-
     plot.margin = margin(5.5, 300, 5.5, 5.5, "pt"),
     plot.background = element_rect(fill = "white", color = NULL))
   ggsave("plots/ngdc-earthquake-scatter.png", plot = eq_plot, device = "png",
-         width = 20, height = 5.833, units = "in", dpi = "print")
+         width = 15, height = 4.36, units = "in", dpi = "print")
 tryCatch(ggplot2:::print.ggplot(eq_plot), error = \(e) warning(paste("Window may be too small for earthquake plot.", e)))
 ```
 
