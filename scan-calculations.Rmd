@@ -187,7 +187,7 @@ get_de_pop_growth <- function(city, country = country) {
   table_ids = c("citysection", "largecities", "adminareas")
   for (id in table_ids) {
     de <- read_html(url) %>%
-      html_node(paste0("section#", table_id)) %>%
+      html_node(paste0("section#", id)) %>%
       html_node("table") %>%
       html_table()
       if (any(str_detect(tolatin(de$Name), tolatin(city)))) break
@@ -195,7 +195,7 @@ get_de_pop_growth <- function(city, country = country) {
   
   pop_growth_de <- de %>%
     select(Location = Name, contains("Population"), Area = starts_with("Area")) %>%
-    filter(str_detect(tolatin(Location), tolatin(city))) %>%
+    filter(str_detect(tolower(tolatin(Location)), tolower(tolatin(city)))) %>%
     pivot_longer(cols = contains("Population"), values_to = "Population", names_to = "Year") %>%
     mutate(
       Location = Location,
