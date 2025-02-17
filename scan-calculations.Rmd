@@ -372,10 +372,11 @@ pop_manual <- read_csv("manual-data-entry/pop.csv", col_types = "ccddc") %>% mut
 #  pop_longitude <- pop_longitude %>% filter(Method == larger_source)
 # pop_longitude <- pop_longitude %>% filter(Location %ni% pop_manual$Location)
 
-if (nrow(pop_manual) > 0) pop_longitude <- bind_rows(pop_longitude, pop_manual)
+if (nrow(pop_manual) > 0) pop_longitude <- bind_rows(pop_longitude, pop_manual) %>%
+  filter(!is.na(Population))
 
 pop_longitude <- pop_longitude %>%
-mutate(Area_km = case_when(
+  mutate(Area_km = case_when(
          Area_km == 0 ~ NA_real_,
          T ~ Area_km
        )) %>%
@@ -449,8 +450,8 @@ pmap(pop_growth_summary, \(...) {
 print_text("Yearly population, sorted by absolute growth")
 pop_growth %>% mutate(growth = Population - lag(Population)) %>%
   arrange(Location, desc(growth)) 
-print_text("Yearly population, sorted by percentage growth")
 
+print_text("Yearly population, sorted by percentage growth")
 pop_growth %>% mutate(growth_pct = (Population - lag(Population))/lag(Population)) %>%
   arrange(Location, desc(growth_pct)) 
 # if (in_oxford) {
@@ -615,9 +616,9 @@ Reproductive age is percentage of female population that is of reproductive age
 
 ```{r}
 # WorldPop Age Groups
-age_file <- list.files("Stats")[!is.na(str_match(list.files("Stats"), ".*_demographics.csv"))]
+age_file <- list.files("tabular")[!is.na(str_match(list.files("tabular"), ".*_demographics.csv"))]
 if (length(age_file) == 0) warning("No WorldPop age distribution file") else {
-  pop_dist_group_wp <- read_csv(paste0("Stats/", age_file), col_types = "ffd") %>% 
+  pop_dist_group_wp <- read_csv(paste0("tabular/", age_file), col_types = "ffd") %>% 
     rename(Age_Bracket = age_group, Sex = sex, Count = population) %>%
     mutate(Sex = fct_recode(Sex, "Female" = "f", "Male" = "m")) %>%
     mutate(Age_Bracket = forcats::fct_collapse(Age_Bracket, "0-4" = c("0-1", "1-4"))) %>%
@@ -1280,7 +1281,7 @@ if (in_oxford) {
 ## WSF
 ### Urban built-up area
 ```{r}
-wsf_file <- str_subset(list.files("Stats", full.names = T), "(?<!flood_)wsf(?!.*tracker).*(csv|xlsx)") 
+wsf_file <- str_subset(list.files("tabular", full.names = T), "(?<!flood_)wsf(?!.*tracker).*(csv|xlsx)") 
 if (!file.exists(wsf_file)) {
   warning("No WSF.xlsx file. Should there be? Check for different file name.")
 } else {
@@ -1321,7 +1322,7 @@ if (!file.exists(wsf_file)) {
 ### WSF Tracker
 
 ```{r}
-wsf_tracker_file <- str_subset(list.files("Stats", full.names = T), "wsf_tracker.*(csv|xlsx)") 
+wsf_tracker_file <- str_subset(list.files("tabular", full.names = T), "wsf_tracker.*(csv|xlsx)") 
 if (length(wsf_tracker_file) == 0) {
   warning("No WSF tracker file file. Should there be? Check for different file name.")
 } else {
@@ -1362,7 +1363,7 @@ if (length(wsf_tracker_file) == 0) {
 
 ### Landcover
 ```{r}
-lc <- read_csv(str_subset(list.files("Stats", full = T), "lc"), col_types = "cd") %>%
+lc <- read_csv(str_subset(list.files("tabular", full = T), "lc"), col_types = "cd") %>%
   rename(`Land Cover` = `Land Cover Type`, Count = `Pixel Count`) %>%
   # remove_missing(na.rm = T) %>%
   filter(!is.na(`Land Cover`)) %>%
@@ -1475,7 +1476,7 @@ print_text(paste0("The next largest land classes are ", lc2, " (", lc2_pct, "%) 
 
 ### Elevation
 ```{r}
-elevation <- read_csv(str_subset(list.files("Stats", full = T), "elevation.csv"), col_types = "cd") %>%
+elevation <- read_csv(str_subset(list.files("tabular", full = T), "elevation.csv"), col_types = "cd") %>%
   subset(!is.na(Bin)) %>%
   mutate(Elevation = as.numeric(str_replace(Bin, "-.*", "")),
          Bin = factor(Bin, levels = Bin),
@@ -1556,7 +1557,7 @@ ggsave("plots/wsf-elevation-pieplot.png", device = "png",
 
 ### Slope
 ```{r}
-slope <- read_csv(str_subset(list.files("Stats", full = T), "slope"), col_types = "cd") %>%
+slope <- read_csv(str_subset(list.files("tabular", full = T), "slope"), col_types = "cd") %>%
   subset(!is.na(Bin)) %>%
   mutate(Slope = as.numeric(str_replace(Bin, "[-+].*", "")),
          Bin = factor(Bin, levels = Bin),
@@ -1578,7 +1579,7 @@ ggsave("plots/wsf-slope-pieplot.png", device = "png",
 
 ## Urban Flooding
 ```{r}
-flood_osm_file <- list.files("Stats", full.names = T) %>% str_subset("flood_osm")
+flood_osm_file <- list.files("tabular", full.names = T) %>% str_subset("flood_osm")
 if (length(flood_osm_file) == 1) {
   flood_osm <- read_csv(flood_osm_file, col_types = "cfddd") %>%
     mutate(
@@ -1594,10 +1595,10 @@ if (length(flood_osm_file) == 1) {
     warning("Flood OSM file does not exist. Is it named differently?<br><br>")
   }
   if (length(flood_osm_file) > 1) {
-    warning("Too many files in Stats/ match flood_osm pattern")
+    warning("Too many files in tabular/ match flood_osm pattern")
   }
 }
-flood_road_file <- list.files("Stats", full.names = T) %>% str_subset("flood_road")
+flood_road_file <- list.files("tabular", full.names = T) %>% str_subset("flood_road")
 if (length(flood_road_file) == 1) {
   flood_road <- read_csv(flood_road_file, col_types = "fdd") %>%
     mutate(type = forcats::fct_relabel(type, \(x) str_replace(x, "_2020", ""))) %>%
@@ -1607,7 +1608,7 @@ if (length(flood_road_file) == 1) {
     warning("Flood road file does not exist. Is it named differently?<br><br>")
   }
   if (length(flood_road_file) > 1) {
-    warning("Too many files in Stats/ match flood_road pattern")
+    warning("Too many files in tabular/ match flood_road pattern")
   }
 }
 
@@ -1641,6 +1642,7 @@ flood_string <- function(flood_type) {
   paste(roads_string, osm_string, "are located in a", flood_type_long, "flood risk zone with a minimum depth of 15 cm")
 }
 
+flood_file <- str_subset(list.files("tabular", full.names = T), "flood_wsf.csv")
 flood_file <- str_subset(list.files("Stats", full.names = T), "flood_wsf.csv")
 wsf_flood <- full_join(wsf, read_csv(flood_file), by = c("Year" = "year")) %>%
   rowwise() %>%
@@ -1659,7 +1661,7 @@ gather_flood_data <- function(flood_type) {
   return(df)
 }
 
-flood_pop_file <- list.files("Stats", full.names = T) %>% str_subset("flood_pop")
+flood_pop_file <- list.files("tabular", full.names = T) %>% str_subset("flood_pop")
 if (length(flood_road_file) == 1) {
   flood_pop <- read_csv(flood_pop_file, col_types = "fd") %>%
     mutate(type = forcats::fct_relabel(type, \(x) str_replace(x, "_2020", ""))) %>%
@@ -1669,7 +1671,7 @@ if (length(flood_road_file) == 1) {
     warning("Flood pop file does not exist. Is it named differently?<br><br>")
   }
   if (length(flood_pop_file) > 1) {
-    warning("Too many files in Stats/ match flood_pop pattern")
+    warning("Too many files in tabular/ match flood_pop pattern")
   }
 }
 
@@ -2185,7 +2187,7 @@ ggsave("plots/monthly-pv.png", device = "png",
 month_starts <- cumsum(c("Jan" = 31, "Feb" = 28, "Mar"= 31, "Apr" = 30, "May" = 31, "Jun" = 30,
   "Jul" = 31, "Aug" = 31, "Sep"= 30, "Oct" = 31, "Nov" = 30, "Dec" = 31)/7) - 31/7
 
-fwi_file <- str_subset(list.files("Stats", full = T), "fwi")
+fwi_file <- str_subset(list.files("tabular", full = T), "fwi")
 if (length(fwi_file) == 0) warning("No FWI file") else {
   fwi <- read_csv(fwi_file, col_types = "dd")
 
