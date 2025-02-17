@@ -1643,10 +1643,8 @@ flood_string <- function(flood_type) {
 }
 
 flood_file <- str_subset(list.files("tabular", full.names = T), "flood_wsf.csv")
-flood_file <- str_subset(list.files("Stats", full.names = T), "flood_wsf.csv")
-wsf_flood <- full_join(wsf, read_csv(flood_file), by = c("Year" = "year")) %>%
-  rowwise() %>%
-  mutate(combined_2020 = sum(c_across(contains("2020")))) %>% ungroup()
+wsf_flood <- full_join(select(wsf, -starts_with("growth")), read_csv(flood_file), by = c("Year" = "year")) %>%
+  rename(combined_2020 = comb_2020)
 
 gather_flood_data <- function(flood_type) {
   df <- select(wsf_flood, Year, uba_km2, uba_km2_exposed = contains(flood_type))
