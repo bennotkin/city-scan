@@ -466,6 +466,7 @@ pop_growth %>% mutate(growth_pct = (Population - lag(Population))/lag(Population
 ```
 
 ### Population Density
+Density should be overlaid histograms or box plots? joy division? When we have this spatial data ... 
 ```{r}
 density <- pop_longitude %>%
     filter(Area_km != 0 & !is.na(Area_km)) %>%
@@ -1363,7 +1364,7 @@ if (length(wsf_tracker_file) == 0) {
 
 ### Landcover
 ```{r}
-lc <- read_csv(str_subset(list.files("tabular", full = T), "lc"), col_types = "cd") %>%
+lc <- read_csv(str_subset(list.files("tabular", full = T), "lc.csv"), col_types = "cd") %>%
   rename(`Land Cover` = `Land Cover Type`, Count = `Pixel Count`) %>%
   # remove_missing(na.rm = T) %>%
   filter(!is.na(`Land Cover`)) %>%
@@ -1557,7 +1558,7 @@ ggsave("plots/wsf-elevation-pieplot.png", device = "png",
 
 ### Slope
 ```{r}
-slope <- read_csv(str_subset(list.files("tabular", full = T), "slope"), col_types = "cd") %>%
+slope <- read_csv(str_subset(list.files("tabular", full = T), "slope.csv"), col_types = "cd") %>%
   subset(!is.na(Bin)) %>%
   mutate(Slope = as.numeric(str_replace(Bin, "[-+].*", "")),
          Bin = factor(Bin, levels = Bin),
