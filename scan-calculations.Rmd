@@ -1986,7 +1986,7 @@ eq_plot <-
     segment.curvature = 1e-20, segment.square = T) +
   geom_point(data = \(x) filter(x, !is.na(eqMagnitude)), aes(size = eqMagnitude), shape = 1, color = "black") +
   geom_point(data = \(x) slice_max(x, magXdist, n = 10), aes(size = eqMagnitude), color = "grey46") +
-  geom_point(data = \(x) filter(x, is.na(eqMagnitude)), shape = 1, color = "grey92") +
+  geom_point(data = \(x) filter(x, is.na(eqMagnitude)), shape = 1, color = "grey75") +
   scale_x_continuous(
     limits = c(0, 500),
     labels = \(x) paste(x, "km"),
@@ -1999,7 +1999,9 @@ eq_plot <-
     minor_breaks = seq.Date(as.Date("1900-01-01"), as.Date("2030-01-01"), by = "5 years"),
     labels = seq(1900, 2025, by = 20),
     trans = c("date", "reverse")) +
-  scale_size(range = c(1, 6)) + # max_size = 7,
+  scale_size(range = c(1, 6),
+             breaks = scales::breaks_extended(3),
+             guide = guide_legend(nrow = 1)) + # max_size = 7,
   # scale_color_manual(values = c(" " = "grey"), guide = "none") +
   labs(
     x = paste("Distance from", city),
@@ -2019,6 +2021,7 @@ eq_plot <-
     legend.box.margin = margin(0, 0, -37, 15),
     plot.margin = margin(5.5, 300, 5.5, 5.5, "pt"),
     plot.background = element_rect(fill = "white", color = NULL))
+
   ggsave("plots/ngdc-earthquake-scatter.png", plot = eq_plot, device = "png",
          width = 15, height = 4.36, units = "in", dpi = "print")
 tryCatch(ggplot2:::print.ggplot(eq_plot), error = \(e) warning(paste("Window may be too small for earthquake plot.", e)))
