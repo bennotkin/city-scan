@@ -514,6 +514,7 @@ density_plot <- density %>%
   scale_color_manual(values = hues) +
   expand_limits(y = 0)
 
+write_csv(density, "data-sharing/04-tabular-data/population-density.csv")
 ggsave("plots/oxford-pop-density-scatter.png", plot = density_plot, device = "png",
        width = 8, height = 5, units = "in", dpi = "print")
 
@@ -583,6 +584,8 @@ if (in_oxford) {
   
   # Print population distribution plot (OUTPUT)
   ggplot2:::print.ggplot(pop_distro_plot)
+  
+  write_csv(pop_dist_group, "data-sharing/04-tabular-data/oxford-pop-distro.csv")
   
   # # Plotting histogram of focus city and lines for all other cities
   # # Probably better to use just one line for the median city
@@ -661,6 +664,7 @@ if (length(age_file) == 0) warning("No WorldPop age distribution file") else {
   ggplot2:::print.ggplot(pop_age_sex_plot)
   ggsave("plots/world-pop-age-sex.png", plot = pop_age_sex_plot, device = "png",
          width = 8, height = 6.84, units = "in", dpi = "print")
+  write_csv(pop_dist_group, "data-sharing/04-tabular-data/world-pop-age-sex.csv")
   
   under5 <- pop_dist_group_wp %>% 
     filter(Age_Bracket %in% c("0-4")) %>% summarize(across(c(Count, Percentage), sum))
@@ -750,6 +754,7 @@ if (in_oxford) {
          x = "Year")
   ggsave("plots/oxford-age-structure-area.png", plot = pop_dist_plot, device = "png",
          width = 4, height = 3.5, units = "in", dpi = "print")
+  write_csv(pop_dist_structure, "data-sharing/04-tabular-data/oxford-age-structure-area.csv")
   
   # Print plot of age structure (OUTPUT)
   ggplot2:::print.ggplot(pop_dist_plot)
@@ -808,6 +813,7 @@ if (in_oxford) {
   ggsave("plots/oxford-national-shares.png", plot = national_shares_plot, device = "png",
          width = 8, height = 6.5, units = "in", dpi = "print")
   ggplot2:::print.ggplot(national_shares_plot)
+  write_csv(national_shares_long, "data-sharing/04-tabular-data/oxford-national-shares.csv")
 }
 ```
 
@@ -918,6 +924,7 @@ multi_city_pop_plot <- ggplot(pop_longitude) +
 ggplot2:::print.ggplot(multi_city_pop_plot)
 ggsave("plots/oxford-pop_line.png", device = "png",
        width = 5, height = 4.6, units = "in", dpi = "print")
+write_csv(pop_longitude, "data-sharing/04-tabular-data/oxford-pop_line.csv")
 # print_paged_df(pop_longitude)
 ```
 
@@ -960,6 +967,7 @@ if (in_oxford) {
   ggplot2:::print.ggplot(multi_city_emp_plot)
   ggsave("plots/oxford-emp_line.png", device = "png", plot = multi_city_emp_plot,
          width = 5, height = 4.6, units = "in", dpi = "print")
+  write_csv(emp_longitude, "data-sharing/04-tabular-data/oxford-emp_line.csv")
 }
 ```
 
@@ -1002,6 +1010,7 @@ scale_y_continuous(
   ggplot2:::print.ggplot(multi_city_gdp_plot)
   ggsave("plots/oxford-gdp_line.png", device = "png",
          width = 5, height = 4.6, units = "in", dpi = "print")
+  write_csv(gdp_longitude, "data-sharing/04-tabular-data/oxford-gdp_line.csv")
 }
 ```
 
@@ -1068,6 +1077,7 @@ if (in_oxford) {
   ggplot2:::print.ggplot(gdppc_longitude_plot)
   ggsave("plots/oxford-gdp-per-capita_line.png", gdppc_longitude_plot, device = "png",
          width = 8, height = 6.5, units = "in", dpi = "print")
+  write_csv(gdppc_longitude, "data-sharing/04-tabular-data/oxford-gdp-per-capita_line.csv")
 }
 ```
 
@@ -1152,6 +1162,7 @@ if (in_oxford) {
   ggplot2:::print.ggplot(emp_shares_plot)
   ggsave("plots/oxford-employment-sectors.png", plot = emp_shares_plot, device = "png",
          width = 16, height = 5, units = "in", dpi = "print")
+  write_csv(emp_shares2, "data-sharing/04-tabular-data/oxford-employment-sectors.csv")
 }
 ```
 
@@ -1184,6 +1195,7 @@ if (in_oxford) {
   ggplot2:::print.ggplot(gva_shares_plot)
   ggsave("plots/oxford-gva-sectors.png", plot = gva_shares_plot, device = "png",
          width = 16, height = 5, units = "in", dpi = "print")
+  write_csv(gva_shares2, "data-sharing/04-tabular-data/oxford-gva-sectors.csv")
 }
 ```
 
@@ -1204,12 +1216,13 @@ if (in_oxford) {
     mutate(Households = 1000 * Households,
            Year = as.numeric(Year))
   
-  household_incomes_bar_plot <- incomes %>% group_by(Location)  %>%
+  household_incomes <- incomes %>% group_by(Location)  %>%
     subset(Year == 2021) %>%
     mutate(Percent = Households / sum(Households), sum = sum(Households)) %>%
     ungroup() %>%
     group_by(Group, Band) %>%
-    summarize(Percent = median(Percent), .groups = "drop") %>%
+    summarize(Percent = median(Percent), .groups = "drop")
+  household_incomes_bar_plot <- household_incomes %>%
     ggplot(aes(y = Band, x = Percent, fill = Group)) +
     geom_col(position = "dodge") +
     scale_fill_manual(values = hues) +
@@ -1223,6 +1236,7 @@ if (in_oxford) {
   ggsave("plots/oxford-household-incomes-bar.png", plot = household_incomes_bar_plot, device = "png",
          width = 8, height = 5, units = "in", dpi = "print")
   ggplot2:::print.ggplot(household_incomes_bar_plot)
+  write_csv(household_incomes, "data-sharing/04-tabular-data/oxford-household-incomes-bar.csv")
   
   incomes_city <- incomes %>% subset(Location == city & Year < 2022 & Year >= 2002) %>%
     group_by(Year) %>%
@@ -1276,6 +1290,7 @@ if (in_oxford) {
   ggsave("plots/oxford-household-incomes-area.png", plot = household_incomes_area_plot, device = "png",
          # width = 16, height = 3.4, units = "in", dpi = "print")
          width = 4, height = 3.5, units = "in", dpi = "print")
+  write_csv(incomes_city2, "data-sharing/04-tabular-data/oxford-household-incomes-area.csv")
 }
 ```
 
@@ -1294,7 +1309,7 @@ if (!file.exists(wsf_file)) {
     select(Year, uba_km2 = any_of(c("AREA_sq_km", "cumulative sq km"))) %>%
     mutate(growth_pct = (uba_km2 / lag(uba_km2) - 1), growth_km2 = uba_km2 - lag(uba_km2))
   uba_plot <- wsf %>%
-    ggplot +
+    ggplot() +
     geom_line(aes(x = Year, y = uba_km2)) +
     scale_x_continuous(
       breaks = seq(1985, 2020, 5),
@@ -1463,6 +1478,7 @@ lc_plot <- ggdonut(lc, "Land Cover", "Percent", colors = lc_colors, title = "Lan
 ggplot2:::print.ggplot(lc_plot)
 ggsave("plots/wsf-lc-pieplot.png", plot = lc_plot, device = "png",
        width = 8, height = 5, units = "in", dpi = "print")
+write_csv(lc, "data-sharing/04-tabular-data/landcover.csv")
 
 lc1 <- lc$`Land Cover`[1]
 lc1_pct <- lc$Percent[1] %>% scales::percent(0.1)
@@ -1554,6 +1570,7 @@ elevation_colors <- c(
 ggdonut(elevation, "Bin", "percent", colors = elevation_colors, title = "Elevation")
 ggsave("plots/wsf-elevation-pieplot.png", device = "png",
        width = 8, height = 5, units = "in", dpi = "print")
+write_csv(elevation, "data-sharing/04-tabular-data/elevation.csv")
 ```
 
 ### Slope
@@ -1576,6 +1593,7 @@ slope_colors <- c(
 ggdonut(slope, "Bin", "percent", colors = slope_colors, title = "Slope")
 ggsave("plots/wsf-slope-pieplot.png", device = "png",
        width = 8, height = 5, units = "in", dpi = "print")
+write_csv(slope, "data-sharing/04-tabular-data/slope.csv")
 ```
 
 ## Urban Flooding
@@ -1704,6 +1722,7 @@ if (length(wsf_file) == 0 || !file.exists(wsf_file)) warning("No WSF.xlsx file."
   ggplot2:::print.ggplot(fu_plot)
   ggsave("plots/wsf-fu-plot.png", plot = fu_plot, device = "png",
          width = 4, height = 3.5, units = "in", dpi = "print")
+  write_csv(fu, "data-sharing/04-tabular-data/wsf-fluvial.csv")
 
   print_paged_df(bind_rows(head(fu, 1), tail(fu, 1)))
   print_text(glue("In {fu$Year[1]}, {round(fu$uba_km2_exposed[1], 2)} km^2 of the built-up area ({fu$percent_uba_exposed[1]}) was exposed to river flooding at a minimum depth of 15 cm"))
@@ -1732,6 +1751,7 @@ if (length(wsf_file) == 0 || !file.exists(wsf_file)) warning("No WSF.xlsx file."
   ggplot2:::print.ggplot(pu_plot)
   ggsave("plots/wsf-pu-plot.png", plot = pu_plot, device = "png",
          width = 4, height = 3.5, units = "in", dpi = "print")
+  write_csv(pu, "data-sharing/04-tabular-data/wsf-pluvial.csv")
   
   print_paged_df(bind_rows(head(pu, 1), tail(pu, 1)))
   print_text(glue("In {pu$Year[1]}, {round(pu$uba_km2_exposed[1], 2)} km^2 of the built-up area ({pu$percent_uba_exposed[1]}) was exposed to river flooding at a minimum depth of 15 cm"))
@@ -1761,6 +1781,7 @@ if (length(wsf_file) == 0 || !file.exists(wsf_file)) warning("No WSF.xlsx file."
   ggplot2:::print.ggplot(cu_plot)
   ggsave("plots/wsf-cu-plot.png", plot = cu_plot, device = "png",
          width = 4, height = 3.5, units = "in", dpi = "print")
+  write_csv(cu, "data-sharing/04-tabular-data/wsf-coastal.csv")
   
   print_paged_df(bind_rows(head(cu, 1), tail(cu, 1)))
   print_text(glue("In {cu$Year[1]}, {round(cu$uba_km2_exposed[1], 2)} km^2 of the built-up area ({cu$percent_uba_exposed[1]}) was exposed to river flooding at a minimum depth of 15 cm"))
@@ -1801,6 +1822,7 @@ if (length(wsf_file) == 0 || !file.exists(wsf_file)) warning("No WSF.xlsx file."
   ggplot2:::print.ggplot(pufu_plot)
   ggsave("plots/wsf-pufu-plot.png", plot = pufu_plot, device = "png",
          width = 4, height = 3.5, units = "in", dpi = "print")
+  write_csv(pufu, "data-sharing/04-tabular-data/wsf-combined-flooding.csv")
   
   print_paged_df(bind_rows(head(comb, 1), tail(comb, 1)))
   print_text(glue("In {comb$Year[1]}, {round(comb$uba_km2_exposed[1], 2)} km^2 of the built-up area ({comb$percent_uba_exposed[1]}) was exposed to riverine, surface water, or coastal flooding at a minimum depth of 15 cm"))
@@ -1907,6 +1929,7 @@ flood_text_all %>%
     plot.background = element_rect(fill = "white", color = NULL))
 ggsave("plots/darthmouth_flood_events.pdf", device = "pdf",
   width = 15, height = 4.36, units = "in", dpi = "print")
+write_csv(flood_text_all, "data-sharing/04-tabular-data/flood-events.csv")
 ```
 
 ## Earthquakes
@@ -2025,6 +2048,12 @@ eq_plot <-
   ggsave("plots/ngdc-earthquake-scatter.png", plot = eq_plot, device = "png",
          width = 15, height = 4.36, units = "in", dpi = "print")
 tryCatch(ggplot2:::print.ggplot(eq_plot), error = \(e) warning(paste("Window may be too small for earthquake plot.", e)))
+eq_text %>%
+  st_drop_geometry() %>%
+  mutate(
+    distance = as.vector(units::drop_units(distance)),
+    magXdist = as.vector(magXdist)) %>%
+  write_csv("data-sharing/04-tabular-data/earthquake-events.csv")
 ```
 
 ## Cyclones  
@@ -2130,6 +2159,7 @@ if (nrow(cyclones_near) > 0) {
   
   cyclones_text %>% filter(min_distance <250) %>% count(USA_SSHS)  %>% print_paged_df()
   cyclones_text %>% mutate(distance_bin = cut_width(min_distance, width = 50, boundary = 0)) %>% count(distance_bin)
+  write_csv(cyclones_text, "data-sharing/04-tabular-data/cyclone-events.csv")
 }
 ```
 
@@ -2168,6 +2198,7 @@ monthly_pv %>%
     panel.grid.minor.x = element_blank())
 ggsave("plots/monthly-pv.png", device = "png",
        width = 4, height = 3.5, units = "in", dpi = "print")
+write_csv(monthly_pv, "data-sharing/04-tabular-data/monthly-pv.csv")
 ```
 
 ## FWI
@@ -2195,7 +2226,9 @@ if (length(fwi_file) == 0) warning("No FWI file") else {
     geom_vline(xintercept = 0)
   ggplot2:::print.ggplot(fwi_plot)
   ggsave(file.path("plots/nasa-fwi.png"), plot = fwi_plot, device = "png",
-        width = 4, height = 3.5, units = "in", dpi = "print")
+        # width = 4, height = 3.5, units = "in", dpi = "print")
+         width = 8, height = 6.5, units = "in", dpi = "print")
+  write_csv(fwi, "data-sharing/04-tabular-data/fwi.csv")
 }
 ```
 
